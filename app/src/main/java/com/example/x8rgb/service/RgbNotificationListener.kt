@@ -22,6 +22,9 @@ import javax.inject.Inject
 
 private const val TAG        = "RgbNotifListener"
 private const val PEOPLE_KEY = "android.people.list"
+// Our own foreground-service notification lives on this channel. Ignoring it stops the
+// app from matching its own APP rule and holding the ring on a permanent color.
+private const val SERVICE_CHANNEL = "x8rgb_service"
 
 /**
  * Maps notifications to ring colors via PriorityResolver (CONTACT > GROUP > APP).
@@ -48,7 +51,7 @@ class RgbNotificationListener : NotificationListenerService() {
     private var rulesJob: Job? = null
 
     override fun onListenerConnected() {
-        DiagLog.log("notif", "listener connected")
+        DiagLog.log("notif", "listener connected build=0011")
         rulesJob?.cancel()
         rulesJob = scope.launch {
             ruleRepository.getEnabledRules().collect { cachedRules = it }
@@ -64,20 +67,28 @@ class RgbNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg   = sbn.packageName ?: return
         val notif = sbn.notification ?: return
+        // Detail for our own notifications only (ids and channels, never text).
+        if (pkg == packageName) {
+            DiagLog.log("notif", "post self id=${sbn.id} ch=${notif.channelId} ongoing=${sbn.isOngoing} key=${sbn.key.hashCode()}")
+        }
+        if (notif.channelId == SERVICE_CHANNEL) return     // our own service notification
         val key   = contactKey(notif)
         val rule  = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
             ?: return                              // no rule: leave the ring alone
-        DiagLog.log("notif", "match pkg=$pkg type=${rule.type} contact=${key != null}")
+        DiagLog.log("notif", "match pkg=$pkg id=${sbn.id} ch=${notif.channelId} type=${rule.type} contact=${key != null}")
         activeStack.remove(sbn.key)                // re-post moves it to the top
         activeStack[sbn.key] = rule
         sendColor(rule.color)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.packageName == packageName) {
+            DiagLog.log("notif", "removed self id=${sbn.id} key=${sbn.key.hashCode()} tracked=${activeStack.containsKey(sbn.key)}")
+        }
         if (activeStack.remove(sbn.key) == null) return
         // Fall back to the most recent still-active matched notification, else off.
         val next = activeStack.values.lastOrNull()?.color ?: RgbColor.OFF
-        DiagLog.log("notif", "removed; fallback to ${if (next == RgbColor.OFF) "off" else "rule"}")
+        DiagLog.log("notif", "removed; stack=${activeStack.size} fallback=${if (next == RgbColor.OFF) "off" else "rule"}")
         sendColor(next)
     }
 
