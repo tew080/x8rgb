@@ -1,4 +1,4 @@
-package com.example.x8rgb.ui.theme
+package com.x8rgb.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

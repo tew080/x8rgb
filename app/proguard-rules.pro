@@ -19,3 +19,21 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ── Shizuku (reflection-based, compileOnly) ─────────────────────────────────
+-keep class rikka.shizuku.** { *; }
+-dontwarn rikka.shizuku.**
+
+# ── Room ─────────────────────────────────────────────────────────────────────
+-keep class com.x8rgb.data.db.entity.** { *; }
+-keepclassmembers class com.x8rgb.data.db.entity.** { *; }
+
+# ── Hilt generated components ────────────────────────────────────────────────
+-keep class dagger.hilt.** { *; }
+-dontwarn dagger.hilt.**
+
+# ── JTransforms ──────────────────────────────────────────────────────────────
+-keep class edu.emory.mathcs.jtransforms.** { *; }
+
+# ── Kotlin value classes (RgbColor) ─────────────────────────────────────────
+-keep @kotlin.jvm.JvmInline class com.x8rgb.domain.model.RgbColor { *; }

@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.X8rgb" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.X8RGB" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
