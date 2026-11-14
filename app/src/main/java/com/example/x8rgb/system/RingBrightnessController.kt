@@ -32,12 +32,10 @@ class RingBrightnessController @Inject constructor(
         data class Failure(val msg: String) : WriteResult()
     }
 
-    fun hasPermission(): Boolean = try {
-        // Probe write; value 130 is HyperOS default — safe to re-write
-        Settings.Global.putInt(ctx.contentResolver, KEY, read())
-        true
-    } catch (_: SecurityException) { false }
-    catch (_: Exception)           { false }
+    // Read-only check; the previous probe wrote to Settings on every emission.
+    fun hasPermission(): Boolean =
+        ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
 
     fun read(): Int =
         Settings.Global.getInt(ctx.contentResolver, KEY, RgbColor.DEFAULT_BRIGHTNESS)

@@ -29,7 +29,7 @@ class MainViewModel @Inject constructor(
         .map { settings ->
             MainUiState(
                 settings = settings ?: AppSettingsEntity(),
-                permissionsGranted = permissionChecker.check().let { it.notificationListener && it.writeSecureSettings },
+                permissionsGranted = permissionChecker.check().notificationListener,
                 isLoading = false
             )
         }
