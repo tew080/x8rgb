@@ -73,4 +73,10 @@
     <string name="label_force_color">สีที่บังคับค้าง</string>
     <string name="dialog_base_color">เลือกสีพื้นฐาน</string>
     <string name="dialog_force_color">เลือกสีบังคับค้าง</string>
+
+    <string name="card_ambient_title">เอฟเฟกต์ตลอดเวลา</string>
+    <string name="hint_ambient">เล่นเมื่อไม่มีแจ้งเตือน/บังคับค้าง — ใช้สีพื้นฐานเป็นฐาน</string>
+    <string name="label_ambient_effect">เอฟเฟกต์: %s</string>
+    <string name="label_ambient_color">สีฐานของเอฟเฟกต์</string>
+    <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
 </resources>

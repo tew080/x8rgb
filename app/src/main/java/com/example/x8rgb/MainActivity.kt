@@ -136,6 +136,7 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
                     onBaseColor = viewModel::setBaseColor,
                     onForceHold = viewModel::setForceHold,
                     onForceHoldColor = viewModel::setForceHoldColor,
+                    onAmbientEffect = viewModel::setAmbientEffect,
                     onRequestShizuku = viewModel::requestShizukuPermission,
                     onGrantShizuku = viewModel::grantViaShizuku,
                     onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
@@ -171,6 +172,7 @@ private fun HomeScreen(
     onBaseColor: (RgbColor) -> Unit,
     onForceHold: (Boolean) -> Unit,
     onForceHoldColor: (RgbColor) -> Unit,
+    onAmbientEffect: (Int) -> Unit,
     onRequestShizuku: () -> Unit,
     onGrantShizuku: () -> Unit,
     onRequestAudio: () -> Unit,
@@ -210,6 +212,13 @@ private fun HomeScreen(
             onBaseColor = onBaseColor,
             onForceHold = onForceHold,
             onForceHoldColor = onForceHoldColor,
+        )
+
+        AmbientEffectCard(
+            effectId = state.settings.ambientEffectId,
+            baseColor = RgbColor(state.settings.baseColorPacked),
+            onEffect = onAmbientEffect,
+            onBaseColor = onBaseColor,
         )
     }
 }
@@ -473,6 +482,77 @@ private fun HsvPickerDialog(
     )
 }
 
+@Composable
+private fun AmbientEffectCard(
+    effectId: Int,
+    baseColor: RgbColor,
+    onEffect: (Int) -> Unit,
+    onBaseColor: (RgbColor) -> Unit,
+) {
+    var pickEffect by remember { mutableStateOf(false) }
+    var pickColor by remember { mutableStateOf(false) }
+    val name = EffectEngine.EFFECT_NAMES.getOrElse(effectId) { "Static" }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.card_ambient_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.hint_ambient), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.label_ambient_effect, name), style = MaterialTheme.typography.bodyLarge)
+                TextButton(onClick = { pickEffect = true }) { Text(stringResource(R.string.btn_pick_effect)) }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.label_ambient_color), style = MaterialTheme.typography.bodyMedium)
+                ColorDot(
+                    color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
+                    selected = true,
+                    size = 36.dp,
+                    onClick = { pickColor = true },
+                )
+            }
+        }
+    }
+
+    if (pickEffect) {
+        AlertDialog(
+            onDismissRequest = { pickEffect = false },
+            confirmButton = { TextButton(onClick = { pickEffect = false }) { Text(stringResource(R.string.btn_cancel)) } },
+            title = { Text(stringResource(R.string.dialog_select_effect)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    items(EffectEngine.EFFECT_NAMES.size) { id ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEffect(id); pickEffect = false }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = effectId == id, onClick = { onEffect(id); pickEffect = false })
+                            Text(EffectEngine.EFFECT_NAMES[id])
+                        }
+                    }
+                }
+            },
+        )
+    }
+    if (pickColor) {
+        HsvPickerDialog(
+            title = stringResource(R.string.dialog_base_color),
+            initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
+            onPick = { onBaseColor(it); pickColor = false },
+            onDismiss = { pickColor = false },
+        )
+    }
+}
 
 @Composable
 private fun RulesScreen(

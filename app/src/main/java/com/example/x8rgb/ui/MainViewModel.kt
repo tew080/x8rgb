@@ -179,6 +179,10 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.updateForceHoldColor(color.packed) }
     }
 
+    fun setAmbientEffect(effectId: Int) {
+        viewModelScope.launch { settingsRepository.updateAmbientEffect(effectId) }
+    }
+
     fun addAppRule(app: AppItem) {
         viewModelScope.launch {
             val existing = uiState.value.rules.firstOrNull { it.key == app.packageName }

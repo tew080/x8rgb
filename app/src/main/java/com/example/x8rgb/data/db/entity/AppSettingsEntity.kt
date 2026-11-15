@@ -19,4 +19,6 @@ data class AppSettingsEntity(
     /** Force-hold locks this color above notifications/music until cleared. */
     val forceHoldEnabled: Boolean      = false,
     val forceHoldColorPacked: Long     = 0xFFFFFF82L,
+    /** Always-on effect while idle. EffectEngine.EFFECT_STATIC = solid base only. */
+    val ambientEffectId: Int           = 10, // EffectEngine.EFFECT_STATIC
 )

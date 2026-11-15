@@ -57,4 +57,8 @@ class SettingsRepository @Inject constructor(private val dao: AppSettingsDao) {
     suspend fun updateForceHoldColor(packed: Long) {
         dao.upsert(get().copy(forceHoldColorPacked = packed))
     }
+
+    suspend fun updateAmbientEffect(effectId: Int) {
+        dao.upsert(get().copy(ambientEffectId = effectId))
+    }
 }

@@ -1,0 +1,214 @@
+From 0000000000000000000000000000000000000003 Mon Sep 17 00:00:00 2001
+From: x8rgb dev <dev@x8rgb.local>
+Date: Sun, 15 Nov 2026 13:50:00 +0700
+Subject: [PATCH] Ambient always-on effect setting + home UI picker
+
+Add ambientEffectId to settings. When idle (no force-hold/notif/music/motion),
+run EffectEngine on baseColor continuously. Home card to pick effect + enable.
+---
+ app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt |  2 +
+ app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt |  5 +
+ app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt | 12 +-
+ app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt |  5 +
+ app/src/main/java/com/example/x8rgb/MainActivity.kt | 95 +++++++++++++++++
+ app/src/main/res/values/strings.xml |  6 +
+ 6 files changed, 120 insertions(+), 5 deletions(-)
+
+diff --git a/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt b/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
+--- a/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
++++ b/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
+@@ -16,4 +16,6 @@
+     val baseColorPacked: Long          = 0L,
+     val forceHoldEnabled: Boolean      = false,
+     val forceHoldColorPacked: Long     = 0xFFFFFF82L,
++    /** Always-on effect while idle. EffectEngine.EFFECT_STATIC = solid base only. */
++    val ambientEffectId: Int           = 10, // EffectEngine.EFFECT_STATIC
+ )
+diff --git a/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt b/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
+--- a/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
++++ b/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
+@@ -15,7 +15,7 @@
+         LedProfileEntity::class,
+         AppSettingsEntity::class,
+     ],
+-    version  = 2,
++    version  = 3,
+     exportSchema = true,
+ )
+ abstract class AppDatabase : RoomDatabase() {
+diff --git a/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt b/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
+--- a/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
++++ b/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
+@@ -55,4 +55,8 @@
+     suspend fun updateForceHoldColor(packed: Long) {
+         dao.upsert(get().copy(forceHoldColorPacked = packed))
+     }
++
++    suspend fun updateAmbientEffect(effectId: Int) {
++        dao.upsert(get().copy(ambientEffectId = effectId))
++    }
+ }
+diff --git a/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt b/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
+--- a/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
++++ b/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
+@@ -175,5 +175,15 @@
+     /** Idle path: base color if set, else hand ring back to system. */
+     private fun applyBaseOrRelease() {
+         val base = RgbColor(settings.baseColorPacked)
+-        if (hasLight(base)) applyColor(base) else releaseRing()
++        val effectId = settings.ambientEffectId
++        if (!hasLight(base) && effectId == EffectEngine.EFFECT_STATIC) {
++            releaseRing()
++            return
++        }
++        // Ambient always-on: animate base (or white if base empty but effect needs a color)
++        val seed = if (hasLight(base)) base else RgbColor(255, 255, 255)
++        val frame = if (effectId == EffectEngine.EFFECT_STATIC) seed
++        else effectEngine.compute(effectId, tick, seed)
++        applyColor(frame)
++        tick++
+     }
+diff --git a/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt b/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
+--- a/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
++++ b/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
+@@ -150,5 +150,9 @@
+     fun setForceHoldColor(color: RgbColor) {
+         viewModelScope.launch { settingsRepository.updateForceHoldColor(color.packed) }
+     }
++
++    fun setAmbientEffect(effectId: Int) {
++        viewModelScope.launch { settingsRepository.updateAmbientEffect(effectId) }
++    }
+ 
+     fun addAppRule(app: AppItem) {
+diff --git a/app/src/main/java/com/example/x8rgb/MainActivity.kt b/app/src/main/java/com/example/x8rgb/MainActivity.kt
+--- a/app/src/main/java/com/example/x8rgb/MainActivity.kt
++++ b/app/src/main/java/com/example/x8rgb/MainActivity.kt
+@@ -132,6 +132,7 @@
+                     onBaseColor = viewModel::setBaseColor,
+                     onForceHold = viewModel::setForceHold,
+                     onForceHoldColor = viewModel::setForceHoldColor,
++                    onAmbientEffect = viewModel::setAmbientEffect,
+                     onRequestShizuku = viewModel::requestShizukuPermission,
+                     onGrantShizuku = viewModel::grantViaShizuku,
+                     onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+@@ -170,6 +170,7 @@
+     onBaseColor: (RgbColor) -> Unit,
+     onForceHold: (Boolean) -> Unit,
+     onForceHoldColor: (RgbColor) -> Unit,
++    onAmbientEffect: (Int) -> Unit,
+     onRequestShizuku: () -> Unit,
+     onGrantShizuku: () -> Unit,
+     onRequestAudio: () -> Unit,
+@@ -205,10 +205,17 @@
+         BaseAndHoldCard(
+             baseColor = RgbColor(state.settings.baseColorPacked),
+             forceHold = state.settings.forceHoldEnabled,
+             forceColor = RgbColor(state.settings.forceHoldColorPacked),
+             onBaseColor = onBaseColor,
+             onForceHold = onForceHold,
+             onForceHoldColor = onForceHoldColor,
+         )
++
++        AmbientEffectCard(
++            effectId = state.settings.ambientEffectId,
++            baseColor = RgbColor(state.settings.baseColorPacked),
++            onEffect = onAmbientEffect,
++            onBaseColor = onBaseColor,
++        )
+     }
+ }
+@@ -430,5 +430,78 @@
+     )
+ }
++
++@Composable
++private fun AmbientEffectCard(
++    effectId: Int,
++    baseColor: RgbColor,
++    onEffect: (Int) -> Unit,
++    onBaseColor: (RgbColor) -> Unit,
++) {
++    var pickEffect by remember { mutableStateOf(false) }
++    var pickColor by remember { mutableStateOf(false) }
++    val name = EffectEngine.EFFECT_NAMES.getOrElse(effectId) { "Static" }
++
++    Card(modifier = Modifier.fillMaxWidth()) {
++        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
++            Text(stringResource(R.string.card_ambient_title), style = MaterialTheme.typography.titleMedium)
++            Text(stringResource(R.string.hint_ambient), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
++            Row(
++                modifier = Modifier.fillMaxWidth(),
++                horizontalArrangement = Arrangement.SpaceBetween,
++                verticalAlignment = Alignment.CenterVertically,
++            ) {
++                Text(stringResource(R.string.label_ambient_effect, name), style = MaterialTheme.typography.bodyLarge)
++                TextButton(onClick = { pickEffect = true }) { Text(stringResource(R.string.btn_pick_effect)) }
++            }
++            Row(
++                modifier = Modifier.fillMaxWidth(),
++                horizontalArrangement = Arrangement.SpaceBetween,
++                verticalAlignment = Alignment.CenterVertically,
++            ) {
++                Text(stringResource(R.string.label_ambient_color), style = MaterialTheme.typography.bodyMedium)
++                ColorDot(
++                    color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
++                    selected = true,
++                    size = 36.dp,
++                    onClick = { pickColor = true },
++                )
++            }
++        }
++    }
++
++    if (pickEffect) {
++        AlertDialog(
++            onDismissRequest = { pickEffect = false },
++            confirmButton = { TextButton(onClick = { pickEffect = false }) { Text(stringResource(R.string.btn_cancel)) } },
++            title = { Text(stringResource(R.string.dialog_select_effect)) },
++            text = {
++                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
++                    items(EffectEngine.EFFECT_NAMES.size) { id ->
++                        Row(
++                            modifier = Modifier
++                                .fillMaxWidth()
++                                .clickable { onEffect(id); pickEffect = false }
++                                .padding(vertical = 8.dp),
++                            verticalAlignment = Alignment.CenterVertically,
++                        ) {
++                            RadioButton(selected = effectId == id, onClick = { onEffect(id); pickEffect = false })
++                            Text(EffectEngine.EFFECT_NAMES[id])
++                        }
++                    }
++                }
++            },
++        )
++    }
++    if (pickColor) {
++        HsvPickerDialog(
++            title = stringResource(R.string.dialog_base_color),
++            initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
++            onPick = { onBaseColor(it); pickColor = false },
++            onDismiss = { pickColor = false },
++        )
++    }
++}
++
+ @Composable
+ private fun RulesScreen(
+     state: MainUiState,
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -72,3 +72,9 @@
+     <string name="dialog_base_color">เลือกสีพื้นฐาน</string>
+     <string name="dialog_force_color">เลือกสีบังคับค้าง</string>
++
++    <string name="card_ambient_title">เอฟเฟกต์ตลอดเวลา</string>
++    <string name="hint_ambient">เล่นเมื่อไม่มีแจ้งเตือน/บังคับค้าง — ใช้สีพื้นฐานเป็นฐาน</string>
++    <string name="label_ambient_effect">เอฟเฟกต์: %s</string>
++    <string name="label_ambient_color">สีฐานของเอฟเฟกต์</string>
++    <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
+ </resources>
+-- 
+2.56.0

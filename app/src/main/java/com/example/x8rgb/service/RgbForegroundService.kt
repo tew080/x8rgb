@@ -222,7 +222,17 @@ class RgbForegroundService : Service() {
     /** Idle path: base color if set, else hand ring back to system. */
     private fun applyBaseOrRelease() {
         val base = RgbColor(settings.baseColorPacked)
-        if (hasLight(base)) applyColor(base) else releaseRing()
+        val effectId = settings.ambientEffectId
+        if (!hasLight(base) && effectId == EffectEngine.EFFECT_STATIC) {
+            releaseRing()
+            return
+        }
+        // Ambient always-on: animate base (or white if base empty but effect needs a color)
+        val seed = if (hasLight(base)) base else RgbColor(255, 255, 255)
+        val frame = if (effectId == EffectEngine.EFFECT_STATIC) seed
+        else effectEngine.compute(effectId, tick, seed)
+        applyColor(frame)
+        tick++
     }
 
     private fun observeSettings() {

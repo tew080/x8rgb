@@ -1,0 +1,368 @@
+From 0000000000000000000000000000000000000004 Mon Sep 17 00:00:00 2001
+From: x8rgb dev <dev@x8rgb.local>
+Date: Sun, 15 Nov 2026 14:10:00 +0700
+Subject: [PATCH] Single-home UI: notif color, music colors/effects, bass blink
+
+Drop Rules and Settings tabs. Home owns:
+- global notification color + effect
+- music palette mode, effect, bass-reactive blink
+Listener uses global notif settings. Service music path uses bass blink when enabled.
+---
+diff --git a/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt b/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
+--- a/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
++++ b/app/src/main/java/com/example/x8rgb/data/db/entity/AppSettingsEntity.kt
+@@ -18,3 +18,10 @@
+     /** Always-on effect while idle. EffectEngine.EFFECT_STATIC = solid base only. */
+     val ambientEffectId: Int           = 10, // EffectEngine.EFFECT_STATIC
++    // Global notification look (all apps)
++    val notifColorPacked: Long         = 0xFF000082L, // red
++    val notifEffectId: Int             = 10, // static
++    // Music visual
++    val musicColorPacked: Long         = 0x00FF0082L, // green seed
++    val musicEffectId: Int             = 0,  // rainbow-ish default via FFT unless bass
++    val musicBassBlink: Boolean        = true,
+ )
+diff --git a/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt b/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
+--- a/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
++++ b/app/src/main/java/com/example/x8rgb/data/db/AppDatabase.kt
+@@ -15,5 +15,5 @@
+         AppSettingsEntity::class,
+     ],
+-    version  = 3,
++    version  = 4,
+     exportSchema = true,
+ )
+diff --git a/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt b/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
+--- a/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
++++ b/app/src/main/java/com/example/x8rgb/data/repository/SettingsRepository.kt
+@@ -60,4 +60,16 @@
+     suspend fun updateAmbientEffect(effectId: Int) {
+         dao.upsert(get().copy(ambientEffectId = effectId))
+     }
++
++    suspend fun updateNotifLook(colorPacked: Long, effectId: Int) {
++        dao.upsert(get().copy(notifColorPacked = colorPacked, notifEffectId = effectId))
++    }
++
++    suspend fun updateMusicLook(colorPacked: Long, effectId: Int, bassBlink: Boolean) {
++        dao.upsert(get().copy(
++            musicColorPacked = colorPacked,
++            musicEffectId = effectId,
++            musicBassBlink = bassBlink,
++        ))
++    }
+ }
+diff --git a/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt b/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
+--- a/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
++++ b/app/src/main/java/com/example/x8rgb/ui/MainViewModel.kt
+@@ -155,5 +155,13 @@
+     fun setAmbientEffect(effectId: Int) {
+         viewModelScope.launch { settingsRepository.updateAmbientEffect(effectId) }
+     }
++
++    fun setNotifLook(color: RgbColor, effectId: Int) {
++        viewModelScope.launch { settingsRepository.updateNotifLook(color.packed, effectId) }
++    }
++
++    fun setMusicLook(color: RgbColor, effectId: Int, bassBlink: Boolean) {
++        viewModelScope.launch { settingsRepository.updateMusicLook(color.packed, effectId, bassBlink) }
++    }
+ 
+     fun addAppRule(app: AppItem) {
+diff --git a/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt b/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
+--- a/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
++++ b/app/src/main/java/com/example/x8rgb/service/RgbForegroundService.kt
+@@ -155,3 +155,17 @@
+                         settings.musicSyncEnabled && hasLight(musicColor) -> {
+-                            applyColor(musicColor)
++                            val seed = RgbColor(settings.musicColorPacked).let {
++                                if (hasLight(it)) it else musicColor
++                            }
++                            val out = if (settings.musicBassBlink) {
++                                // bass energy in musicColor.r channel from FFT mapping
++                                val bass = (musicColor.r / 255f).coerceIn(0f, 1f)
++                                val k = if (bass > 0.12f) bass else 0.05f
++                                RgbColor((seed.r * k).toInt(), (seed.g * k).toInt(), (seed.b * k).toInt())
++                            } else if (settings.musicEffectId != EffectEngine.EFFECT_STATIC) {
++                                effectEngine.compute(settings.musicEffectId, tick, seed)
++                            } else {
++                                musicColor // spectrum RGB from FFT
++                            }
++                            applyColor(out)
++                            tick++
+                         }
+diff --git a/app/src/main/java/com/example/x8rgb/service/RgbNotificationListener.kt b/app/src/main/java/com/example/x8rgb/service/RgbNotificationListener.kt
+--- a/app/src/main/java/com/example/x8rgb/service/RgbNotificationListener.kt
++++ b/app/src/main/java/com/example/x8rgb/service/RgbNotificationListener.kt
+@@ -1,5 +1,6 @@
+ package com.x8rgb.service
+ 
+ import android.app.Notification
++import android.content.Context
+ import android.content.ComponentName
+ import android.content.Intent
+@@ -35,4 +35,5 @@
+     @Inject lateinit var ruleRepository: RuleRepository
+     @Inject lateinit var priorityResolver: PriorityResolver
++    @Inject lateinit var settingsRepository: com.x8rgb.data.repository.SettingsRepository
+ 
+     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+@@ -70,7 +70,25 @@
+         val key   = contactKey(notif)
+         val rule  = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
+-            ?: return                              // no rule: leave the ring alone
+-        DiagLog.log("notif", "match pkg=$pkg type=${rule.type} anim=${rule.animationId}")
+-        activeStack.remove(sbn.key)                // re-post moves it to the top
+-        activeStack[sbn.key] = rule
+-        sendColor(rule.color, rule.animationId)
++        if (rule != null) {
++            DiagLog.log("notif", "match pkg=$pkg type=${rule.type} anim=${rule.animationId}")
++            activeStack.remove(sbn.key)
++            activeStack[sbn.key] = rule
++            sendColor(rule.color, rule.animationId)
++            return
++        }
++        // Global notif look (home setting) — any notification without a rule
++        scope.launch {
++            val s = settingsRepository.get()
++            val color = com.x8rgb.domain.model.RgbColor(s.notifColorPacked)
++            if ((color.r or color.g or color.b) == 0) return@launch
++            DiagLog.log("notif", "global notif color pkg=$pkg effect=${s.notifEffectId}")
++            activeStack.remove(sbn.key)
++            activeStack[sbn.key] = com.x8rgb.domain.model.NotificationRule(
++                type = com.x8rgb.domain.model.RuleType.APP,
++                key = pkg,
++                displayName = pkg,
++                color = color,
++                animationId = s.notifEffectId,
++            )
++            sendColor(color, s.notifEffectId)
++        }
+diff --git a/app/src/main/java/com/example/x8rgb/MainActivity.kt b/app/src/main/java/com/example/x8rgb/MainActivity.kt
+--- a/app/src/main/java/com/example/x8rgb/MainActivity.kt
++++ b/app/src/main/java/com/example/x8rgb/MainActivity.kt
+@@ -110,26 +110,30 @@
+     fun setMaster(enabled: Boolean) {
+         viewModel.toggleMaster(enabled)
+         val intent = Intent(context, RgbForegroundService::class.java)
+         if (enabled) {
+             context.startForegroundService(intent)
+         } else {
+             context.stopService(intent)
+         }
+     }
+ 
+-    NavigationSuiteScaffold(
+-        navigationSuiteItems = {
+-            AppDestinations.entries.forEach {
+-                item(
+-                    icon = { Icon(painterResource(it.icon), contentDescription = stringResource(it.labelRes)) },
+-                    label = { Text(stringResource(it.labelRes)) },
+-                    selected = it == destination,
+-                    onClick = { destination = it }
+-                )
+-            }
+-        }
+-    ) {
+-        Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
+-            val modifier = Modifier.padding(inner)
+-            when (destination) {
+-                AppDestinations.HOME -> HomeScreen(
++    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
++        HomeScreen(
++            state = state,
++            modifier = Modifier.padding(inner),
++            onMaster = ::setMaster,
++            onBrightness = viewModel::updateBrightness,
++            onMode = { viewModel.setRingMode(it) },
++            onBaseColor = viewModel::setBaseColor,
++            onForceHold = viewModel::setForceHold,
++            onForceHoldColor = viewModel::setForceHoldColor,
++            onAmbientEffect = viewModel::setAmbientEffect,
++            onNotifLook = viewModel::setNotifLook,
++            onMusicLook = viewModel::setMusicLook,
++            onMusicSync = viewModel::toggleMusicSync,
++            onRequestShizuku = viewModel::requestShizukuPermission,
++            onGrantShizuku = viewModel::grantViaShizuku,
++            onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
++            onTestHardware = viewModel::testHardware,
++        )
++    }
+@@ -168,4 +168,7 @@
+     onAmbientEffect: (Int) -> Unit,
++    onNotifLook: (RgbColor, Int) -> Unit,
++    onMusicLook: (RgbColor, Int, Boolean) -> Unit,
++    onMusicSync: (Boolean) -> Unit,
+     onRequestShizuku: () -> Unit,
+     onGrantShizuku: () -> Unit,
+     onRequestAudio: () -> Unit,
+@@ -220,8 +220,23 @@
+         AmbientEffectCard(
+             effectId = state.settings.ambientEffectId,
+             baseColor = RgbColor(state.settings.baseColorPacked),
+             onEffect = onAmbientEffect,
+             onBaseColor = onBaseColor,
+         )
++
++        NotifLookCard(
++            color = RgbColor(state.settings.notifColorPacked),
++            effectId = state.settings.notifEffectId,
++            onSave = onNotifLook,
++        )
++
++        MusicLookCard(
++            enabled = state.settings.musicSyncEnabled,
++            color = RgbColor(state.settings.musicColorPacked),
++            effectId = state.settings.musicEffectId,
++            bassBlink = state.settings.musicBassBlink,
++            onEnabled = onMusicSync,
++            onSave = onMusicLook,
++        )
+     }
+ }
+@@ -500,3 +500,127 @@
+ }
++
++@Composable
++private fun NotifLookCard(
++    color: RgbColor,
++    effectId: Int,
++    onSave: (RgbColor, Int) -> Unit,
++) {
++    var open by remember { mutableStateOf(false) }
++    val effectName = EffectEngine.EFFECT_NAMES.getOrElse(effectId) { "Static" }
++    Card(modifier = Modifier.fillMaxWidth()) {
++        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            Text(stringResource(R.string.card_notif_title), style = MaterialTheme.typography.titleMedium)
++            Text(stringResource(R.string.hint_notif), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
++            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
++                Text("$effectName", style = MaterialTheme.typography.bodyLarge)
++                ColorDot(color, selected = true, size = 36.dp, onClick = { open = true })
++            }
++            TextButton(onClick = { open = true }) { Text(stringResource(R.string.btn_edit_notif)) }
++        }
++    }
++    if (open) {
++        LookEditorDialog(
++            title = stringResource(R.string.card_notif_title),
++            color = color,
++            effectId = effectId,
++            showBass = false,
++            bass = false,
++            onDismiss = { open = false },
++            onSave = { c, e, _ -> onSave(c, e); open = false },
++        )
++    }
++}
++
++@Composable
++private fun MusicLookCard(
++    enabled: Boolean,
++    color: RgbColor,
++    effectId: Int,
++    bassBlink: Boolean,
++    onEnabled: (Boolean) -> Unit,
++    onSave: (RgbColor, Int, Boolean) -> Unit,
++) {
++    var open by remember { mutableStateOf(false) }
++    val effectName = EffectEngine.EFFECT_NAMES.getOrElse(effectId) { "Static" }
++    Card(modifier = Modifier.fillMaxWidth()) {
++        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
++                Text(stringResource(R.string.card_music_title), style = MaterialTheme.typography.titleMedium)
++                Switch(checked = enabled, onCheckedChange = onEnabled)
++            }
++            Text(stringResource(R.string.hint_music), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
++            if (enabled) {
++                Text(
++                    if (bassBlink) stringResource(R.string.label_music_bass_on)
++                    else stringResource(R.string.label_music_effect, effectName),
++                    style = MaterialTheme.typography.bodyLarge,
++                )
++                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
++                    TextButton(onClick = { open = true }) { Text(stringResource(R.string.btn_edit_music)) }
++                    ColorDot(color, selected = true, size = 36.dp, onClick = { open = true })
++                }
++            }
++        }
++    }
++    if (open) {
++        LookEditorDialog(
++            title = stringResource(R.string.card_music_title),
++            color = color,
++            effectId = effectId,
++            showBass = true,
++            bass = bassBlink,
++            onDismiss = { open = false },
++            onSave = { c, e, b -> onSave(c, e, b); open = false },
++        )
++    }
++}
++
++@Composable
++private fun LookEditorDialog(
++    title: String,
++    color: RgbColor,
++    effectId: Int,
++    showBass: Boolean,
++    bass: Boolean,
++    onDismiss: () -> Unit,
++    onSave: (RgbColor, Int, Boolean) -> Unit,
++) {
++    var c by remember { mutableStateOf(color) }
++    var e by remember { mutableStateOf(effectId) }
++    var b by remember { mutableStateOf(bass) }
++    AlertDialog(
++        onDismissRequest = onDismiss,
++        confirmButton = { TextButton(onClick = { onSave(c, e, b) }) { Text(stringResource(R.string.btn_save)) } },
++        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) } },
++        title = { Text(title) },
++        text = {
++            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                if (showBass) {
++                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
++                        Text(stringResource(R.string.label_bass_blink))
++                        Switch(checked = b, onCheckedChange = { b = it })
++                    }
++                }
++                Text(stringResource(R.string.dialog_select_color), style = MaterialTheme.typography.titleSmall)
++                HsvColorPicker(initial = c, onColorChange = { c = it }, modifier = Modifier.fillMaxWidth())
++                if (!b) {
++                    Text(stringResource(R.string.dialog_select_effect), style = MaterialTheme.typography.titleSmall)
++                    LazyColumn(modifier = Modifier.height(160.dp)) {
++                        items(EffectEngine.EFFECT_NAMES.size) { id ->
++                            Row(
++                                Modifier.fillMaxWidth().clickable { e = id }.padding(vertical = 6.dp),
++                                verticalAlignment = Alignment.CenterVertically,
++                            ) {
++                                RadioButton(selected = e == id, onClick = { e = id })
++                                Text(EffectEngine.EFFECT_NAMES[id])
++                            }
++                        }
++                    }
++                }
++            }
++        },
++    )
++}
++
+ @Composable
+ private fun RulesScreen(
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -78,2 +78,12 @@
+     <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
++
++    <string name="card_notif_title">สีการแจ้งเตือน</string>
++    <string name="hint_notif">ใช้เมื่อมีแจ้งเตือนจากแอปใดก็ได้ (ถ้าไม่มีกฎเฉพาะ)</string>
++    <string name="btn_edit_notif">ตั้งสี / เอฟเฟกต์แจ้งเตือน</string>
++    <string name="card_music_title">ไฟตอนเล่นเพลง</string>
++    <string name="hint_music">สีฐาน + เอฟเฟกต์ หรือกระพริบตามจังหวะเบส</string>
++    <string name="btn_edit_music">ตั้งค่าไฟเพลง</string>
++    <string name="label_bass_blink">กระพริบตามเบส</string>
++    <string name="label_music_bass_on">โหมดกระพริบตามเบส</string>
++    <string name="label_music_effect">เอฟเฟกต์: %s</string>
+ </resources>
+-- 
+2.56.0
