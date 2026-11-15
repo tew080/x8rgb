@@ -154,6 +154,9 @@ class MainViewModel @Inject constructor(
     fun toggleMusicSync(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.updateMusicSync(enabled)
+            if (enabled) {
+                musicLightManager.disableAllSystemMusicLights()
+            }
             musicLightManager.setPackageEnabled(context.packageName, enabled)
         }
     }
@@ -162,6 +165,18 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.updateMotionReactive(enabled)
         }
+    }
+
+    fun setBaseColor(color: RgbColor) {
+        viewModelScope.launch { settingsRepository.updateBaseColor(color.packed) }
+    }
+
+    fun setForceHold(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.updateForceHold(enabled) }
+    }
+
+    fun setForceHoldColor(color: RgbColor) {
+        viewModelScope.launch { settingsRepository.updateForceHoldColor(color.packed) }
     }
 
     fun addAppRule(app: AppItem) {

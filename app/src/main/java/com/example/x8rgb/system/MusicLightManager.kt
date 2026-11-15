@@ -47,4 +47,22 @@ class MusicLightManager @Inject constructor(
             Log.w(TAG, "setParameters failed for $packageName", e)
         }
     }
+
+    /**
+     * Disables HyperOS music-light for every package currently enabled.
+     * Call when app music-sync turns ON so system effects do not stack on the ring.
+     * Returns number of packages turned off.
+     */
+    fun disableAllSystemMusicLights(): Int {
+        val state = getState()
+        var n = 0
+        for ((pkg, enabled) in state) {
+            if (enabled) {
+                setPackageEnabled(pkg, false)
+                n++
+            }
+        }
+        Log.i(TAG, "disabled system music-light for $n packages")
+        return n
+    }
 }

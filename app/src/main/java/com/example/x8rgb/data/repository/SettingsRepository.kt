@@ -39,4 +39,22 @@ class SettingsRepository @Inject constructor(private val dao: AppSettingsDao) {
     suspend fun updateMotionReactive(enabled: Boolean) {
         dao.upsert(get().copy(motionReactiveEnabled = enabled))
     }
+
+    suspend fun updateBaseColor(packed: Long) {
+        dao.upsert(get().copy(baseColorPacked = packed))
+    }
+
+    suspend fun updateForceHold(enabled: Boolean, colorPacked: Long? = null) {
+        val cur = get()
+        dao.upsert(
+            cur.copy(
+                forceHoldEnabled = enabled,
+                forceHoldColorPacked = colorPacked ?: cur.forceHoldColorPacked,
+            )
+        )
+    }
+
+    suspend fun updateForceHoldColor(packed: Long) {
+        dao.upsert(get().copy(forceHoldColorPacked = packed))
+    }
 }

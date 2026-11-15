@@ -14,4 +14,9 @@ data class AppSettingsEntity(
     val masterEnabled: Boolean         = true,
     val musicSyncEnabled: Boolean      = false,
     val motionReactiveEnabled: Boolean = false,
+    /** Idle base color (RgbColor.packed). 0 = no base, release when idle. */
+    val baseColorPacked: Long          = 0L,
+    /** Force-hold locks this color above notifications/music until cleared. */
+    val forceHoldEnabled: Boolean      = false,
+    val forceHoldColorPacked: Long     = 0xFFFFFF82L,
 )

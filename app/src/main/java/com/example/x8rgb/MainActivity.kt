@@ -72,6 +72,7 @@ import com.x8rgb.domain.model.RgbColor
 import com.x8rgb.service.RgbForegroundService
 import com.x8rgb.system.RingMode
 import com.x8rgb.ui.AppItem
+import com.x8rgb.ui.HsvColorPicker
 import com.x8rgb.ui.MainUiState
 import com.x8rgb.ui.MainViewModel
 import com.x8rgb.ui.RING_PALETTE
@@ -132,6 +133,9 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
                     onMaster = ::setMaster,
                     onBrightness = viewModel::updateBrightness,
                     onMode = { viewModel.setRingMode(it) },
+                    onBaseColor = viewModel::setBaseColor,
+                    onForceHold = viewModel::setForceHold,
+                    onForceHoldColor = viewModel::setForceHoldColor,
                     onRequestShizuku = viewModel::requestShizukuPermission,
                     onGrantShizuku = viewModel::grantViaShizuku,
                     onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
@@ -164,6 +168,9 @@ private fun HomeScreen(
     onMaster: (Boolean) -> Unit,
     onBrightness: (Int) -> Unit,
     onMode: (RingMode) -> Unit,
+    onBaseColor: (RgbColor) -> Unit,
+    onForceHold: (Boolean) -> Unit,
+    onForceHoldColor: (RgbColor) -> Unit,
     onRequestShizuku: () -> Unit,
     onGrantShizuku: () -> Unit,
     onRequestAudio: () -> Unit,
@@ -194,6 +201,15 @@ private fun HomeScreen(
             selected = state.ringMode,
             system = state.systemMode,
             onSelect = onMode,
+        )
+
+        BaseAndHoldCard(
+            baseColor = RgbColor(state.settings.baseColorPacked),
+            forceHold = state.settings.forceHoldEnabled,
+            forceColor = RgbColor(state.settings.forceHoldColorPacked),
+            onBaseColor = onBaseColor,
+            onForceHold = onForceHold,
+            onForceHoldColor = onForceHoldColor,
         )
     }
 }
@@ -346,6 +362,119 @@ private fun RingModeCard(
 }
 
 @Composable
+private fun BaseAndHoldCard(
+    baseColor: RgbColor,
+    forceHold: Boolean,
+    forceColor: RgbColor,
+    onBaseColor: (RgbColor) -> Unit,
+    onForceHold: (Boolean) -> Unit,
+    onForceHoldColor: (RgbColor) -> Unit,
+) {
+    var editBase by remember { mutableStateOf(false) }
+    var editForce by remember { mutableStateOf(false) }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.card_base_hold_title), style = MaterialTheme.typography.titleMedium)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.label_base_color), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.hint_base_color), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
+                ColorDot(
+                    color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(40, 40, 40),
+                    selected = false,
+                    size = 40.dp,
+                    onClick = { editBase = true },
+                )
+            }
+            TextButton(onClick = { onBaseColor(RgbColor.OFF) }) {
+                Text(stringResource(R.string.btn_clear_base))
+            }
+
+            HorizontalDivider()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.label_force_hold), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.hint_force_hold), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
+                Switch(checked = forceHold, onCheckedChange = onForceHold)
+            }
+            if (forceHold) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.label_force_color), style = MaterialTheme.typography.bodyMedium)
+                    ColorDot(
+                        color = forceColor,
+                        selected = true,
+                        size = 40.dp,
+                        onClick = { editForce = true },
+                    )
+                }
+            }
+        }
+    }
+
+    if (editBase) {
+        HsvPickerDialog(
+            title = stringResource(R.string.dialog_base_color),
+            initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
+            onPick = { onBaseColor(it); editBase = false },
+            onDismiss = { editBase = false },
+        )
+    }
+    if (editForce) {
+        HsvPickerDialog(
+            title = stringResource(R.string.dialog_force_color),
+            initial = forceColor,
+            onPick = { onForceHoldColor(it); editForce = false },
+            onDismiss = { editForce = false },
+        )
+    }
+}
+
+@Composable
+private fun HsvPickerDialog(
+    title: String,
+    initial: RgbColor,
+    onPick: (RgbColor) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var current by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onPick(current) }) { Text(stringResource(R.string.btn_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) }
+        },
+        title = { Text(title) },
+        text = {
+            HsvColorPicker(
+                initial = initial,
+                onColorChange = { current = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    )
+}
+
+
+@Composable
 private fun RulesScreen(
     state: MainUiState,
     modifier: Modifier,
@@ -456,20 +585,11 @@ private fun EditRuleDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.dialog_select_color), style = MaterialTheme.typography.titleSmall)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RING_PALETTE.chunked(4).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEach { c ->
-                                ColorDot(
-                                    color = c,
-                                    selected = (c.packed shr 8) == (selectedColor.packed shr 8),
-                                    size = 40.dp,
-                                    onClick = { selectedColor = c }
-                                )
-                            }
-                        }
-                    }
-                }
+                HsvColorPicker(
+                    initial = selectedColor,
+                    onColorChange = { selectedColor = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 HorizontalDivider()
 

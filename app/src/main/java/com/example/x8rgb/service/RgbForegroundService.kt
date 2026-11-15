@@ -137,32 +137,34 @@ class RgbForegroundService : Service() {
                 val master = settings.masterEnabled && mode != RingMode.OFF && !isQuietHours()
                 
                 if (master) {
-                    // 1. Notification priority (Rules)
-                    if (targetColor != RgbColor.OFF || targetAnimationId != EffectEngine.EFFECT_STATIC) {
-                        val colorToShow = if (targetAnimationId == EffectEngine.EFFECT_STATIC) {
-                            targetColor
-                        } else {
-                            effectEngine.compute(targetAnimationId, tick, targetColor)
+                    // Priority: force-hold > notification > music > motion > base > off
+                    when {
+                        settings.forceHoldEnabled -> {
+                            val c = RgbColor(settings.forceHoldColorPacked)
+                            applyColor(if (hasLight(c)) c else RgbColor(255, 255, 255))
                         }
-                        applyColor(colorToShow)
-                        tick++
-                    } 
-                    // 2. Music Sync priority
-                    else if (settings.musicSyncEnabled && (musicColor.r or musicColor.g or musicColor.b) != 0) {
-                        applyColor(musicColor)
-                    }
-                    // 3. Motion Reactive priority
-                    else if (settings.motionReactiveEnabled) {
-                        val intensity = motionManager.motionIntensity.value
-                        if (intensity > 0.05f) {
-                            val c = RgbColor((100 * intensity).toInt(), (150 * intensity).toInt(), 255)
-                            applyColor(c)
-                        } else {
-                            releaseRing()
+                        targetColor != RgbColor.OFF || targetAnimationId != EffectEngine.EFFECT_STATIC -> {
+                            val colorToShow = if (targetAnimationId == EffectEngine.EFFECT_STATIC) {
+                                targetColor
+                            } else {
+                                effectEngine.compute(targetAnimationId, tick, targetColor)
+                            }
+                            applyColor(colorToShow)
+                            tick++
                         }
-                    } 
-                    else {
-                        releaseRing()
+                        settings.musicSyncEnabled && hasLight(musicColor) -> {
+                            applyColor(musicColor)
+                        }
+                        settings.motionReactiveEnabled -> {
+                            val intensity = motionManager.motionIntensity.value
+                            if (intensity > 0.05f) {
+                                val c = RgbColor((100 * intensity).toInt(), (150 * intensity).toInt(), 255)
+                                applyColor(c)
+                            } else {
+                                applyBaseOrRelease()
+                            }
+                        }
+                        else -> applyBaseOrRelease()
                     }
                 } else {
                     releaseRing()
@@ -171,6 +173,12 @@ class RgbForegroundService : Service() {
                 delay(TICK_INTERVAL)
             }
         }
+    }
+
+    /** Idle path: base color if set, else hand ring back to system. */
+    private fun applyBaseOrRelease() {
+        val base = RgbColor(settings.baseColorPacked)
+        if (hasLight(base)) applyColor(base) else releaseRing()
     }
 
     private fun observeSettings() {
@@ -289,6 +297,8 @@ class RgbForegroundService : Service() {
         return if (start <= end) hour in start until end
         else hour >= start || hour < end
     }
+
+    private fun hasLight(c: RgbColor): Boolean = (c.r or c.g or c.b) != 0
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(

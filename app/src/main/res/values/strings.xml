@@ -63,4 +63,14 @@
 
     <string name="btn_test_ring">ทดสอบวงแหวนไฟ</string>
     <string name="test_active">กำลังทดสอบ (5 วินาที)...</string>
+
+    <string name="card_base_hold_title">สีพื้นฐาน &amp; ค้างสี</string>
+    <string name="label_base_color">สีพื้นฐาน (เมื่อไม่มีแจ้งเตือน)</string>
+    <string name="hint_base_color">ไฟจะค้างสีนี้เมื่อไม่มีกฎแจ้งเตือน/เพลง/การเคลื่อนไหว</string>
+    <string name="btn_clear_base">ล้างสีพื้นฐาน (ปิดเมื่อ idle)</string>
+    <string name="label_force_hold">บังคับค้างสี (ทับทุกอย่าง)</string>
+    <string name="hint_force_hold">เปิดแล้วสีที่เลือกจะทับ notification / music / motion จนกว่าจะปิด</string>
+    <string name="label_force_color">สีที่บังคับค้าง</string>
+    <string name="dialog_base_color">เลือกสีพื้นฐาน</string>
+    <string name="dialog_force_color">เลือกสีบังคับค้าง</string>
 </resources>
