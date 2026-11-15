@@ -23,6 +23,12 @@ class EffectEngine @Inject constructor() {
             EFFECT_GALAXY         -> galaxy(t)
             EFFECT_LIGHTNING      -> lightning(t)
             EFFECT_NORTHERN_LIGHT -> northernLight(t)
+            EFFECT_SCAN           -> scan(t, base)      // L->R brightness sweep (single-zone sim)
+            EFFECT_BLINK          -> blink(t, base)
+            EFFECT_STROBE         -> strobe(t, base)
+            EFFECT_WIPE           -> wipe(t, base)
+            EFFECT_HEARTBEAT      -> heartbeat(t, base)
+            EFFECT_SIREN          -> siren(t)
             else                  -> base
         }
 
@@ -80,6 +86,48 @@ class EffectEngine @Inject constructor() {
         return RgbColor(r, g, b)
     }
 
+    /** Moving brightness peak — reads as left-to-right on a single zone ring. */
+    private fun scan(t: Long, base: RgbColor): RgbColor {
+        val phase = (t % 40L).toFloat() / 40f           // 0..1
+        val peak = 1f - abs(phase - 0.5f) * 2f          // triangle 0-1-0
+        val k = 0.15f + 0.85f * peak
+        return scale(base, k)
+    }
+
+    private fun blink(t: Long, base: RgbColor): RgbColor {
+        // ~2 Hz hard on/off
+        return if ((t / 10L) % 2L == 0L) base else RgbColor.OFF
+    }
+
+    private fun strobe(t: Long, base: RgbColor): RgbColor {
+        // short flash bursts
+        return if (t % 8L < 2L) base else RgbColor.OFF
+    }
+
+    /** Soft edge wipe: dark -> full over cycle using base hue. */
+    private fun wipe(t: Long, base: RgbColor): RgbColor {
+        val k = ((t % 50L).toFloat() / 50f)
+        return scale(base, k)
+    }
+
+    private fun heartbeat(t: Long, base: RgbColor): RgbColor {
+        // lub-dub: two peaks then pause
+        val p = (t % 60L).toInt()
+        val k = when {
+            p < 6 -> p / 6f
+            p < 12 -> (12 - p) / 6f
+            p < 18 -> (p - 12) / 6f * 0.7f
+            p < 24 -> (24 - p) / 6f * 0.7f
+            else -> 0.08f
+        }
+        return scale(base, k)
+    }
+
+    private fun siren(t: Long): RgbColor {
+        // red <-> blue alternate
+        return if ((t / 12L) % 2L == 0L) RgbColor(255, 0, 0) else RgbColor(0, 80, 255)
+    }
+
     private fun scale(c: RgbColor, k: Float) = RgbColor(
         (c.r * k).toInt().coerceIn(0, 255),
         (c.g * k).toInt().coerceIn(0, 255),
@@ -113,10 +161,17 @@ class EffectEngine @Inject constructor() {
         const val EFFECT_LIGHTNING      = 8
         const val EFFECT_NORTHERN_LIGHT = 9
         const val EFFECT_STATIC         = 10
+        const val EFFECT_SCAN           = 11
+        const val EFFECT_BLINK          = 12
+        const val EFFECT_STROBE         = 13
+        const val EFFECT_WIPE           = 14
+        const val EFFECT_HEARTBEAT      = 15
+        const val EFFECT_SIREN          = 16
 
         val EFFECT_NAMES = listOf(
             "Rainbow", "Pulse", "Breathe", "Comet", "Aurora",
-            "Ocean", "Fire", "Galaxy", "Lightning", "Northern Light", "Static"
+            "Ocean", "Fire", "Galaxy", "Lightning", "Northern Light", "Static",
+            "Scan L→R", "Blink", "Strobe", "Wipe", "Heartbeat", "Siren"
         )
     }
 }

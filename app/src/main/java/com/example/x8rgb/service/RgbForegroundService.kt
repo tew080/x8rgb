@@ -55,8 +55,7 @@ import javax.inject.Inject
 private const val CHANNEL_ID    = "x8rgb_service"
 private const val NOTIF_ID      = 1
 private const val TICK_INTERVAL = 50L     // 20 fps
-private const val REASSERT_MS   = 400L   // system paints ring often; re-assert ownership
-private const val MIN_SEND_GAP  = 40L
+// No write throttle: HyperOS overwrites the ring between frames; send every tick.
 
 @AndroidEntryPoint
 class RgbForegroundService : Service() {
@@ -182,6 +181,7 @@ class RgbForegroundService : Service() {
                 
                 if (master) {
                     // Priority: force-hold > notification > music > motion > base > off
+                    if (tick % 40L == 0L) suppressSystemCompetitors() // ~2s @ 20fps
                     when {
                         settings.forceHoldEnabled -> {
                             val c = RgbColor(settings.forceHoldColorPacked)
@@ -315,12 +315,7 @@ class RgbForegroundService : Service() {
         val rgb = (r shl 16) or (g shl 8) or b
         
         val now = SystemClock.elapsedRealtime()
-        val changed = rgb != lastRgb
-        val due = now - lastSentAt >= REASSERT_MS
-        
-        if (!changed && !due) return
-        if (changed && now - lastSentAt < MIN_SEND_GAP) return
-
+        // Always push: system charging/notif/music painters steal the ring otherwise.
         if (MiuiLightsBinder.setColor(rgb)) {
             lastRgb = rgb
             lastSentAt = now
