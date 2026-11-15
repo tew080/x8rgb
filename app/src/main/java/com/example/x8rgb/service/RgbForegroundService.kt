@@ -1,18 +1,19 @@
 // X8RGB file: RgbForegroundService.kt
-// Version: v0014
-// Owns the ring while a color is active. Release code only; debug cases live in debug/DebugTestRunner.kt.
-// History:
-//   0009: no idle animation; single OFF on release; ownership rule.
-//   0012: caller package override (debug only, moved out in 0014).
-//   0014: ring mode (OFF / ALWAYS / FACE_DOWN) applied to the system switch; debug code separated.
+// Version: v0019
+// Owns the ring while a color is active. Supports animations, Quiet Hours, Motion Reactive, and Music Sync.
 //
 package com.x8rgb.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.IBinder
 import android.os.Process
 import android.os.SystemClock
@@ -22,17 +23,22 @@ import com.x8rgb.data.db.entity.AppSettingsEntity
 import com.x8rgb.data.repository.RuleRepository
 import com.x8rgb.data.repository.SettingsRepository
 import com.x8rgb.debug.DebugTestRunner
+import com.x8rgb.domain.engine.EffectEngine
+import com.x8rgb.domain.engine.FftProcessor
 import com.x8rgb.domain.model.RgbColor
 import com.x8rgb.system.MiuiLightsBinder
+import com.x8rgb.system.MotionManager
 import com.x8rgb.system.RingMode
 import com.x8rgb.system.RingSwitch
 import com.x8rgb.util.DiagLog
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -41,105 +47,127 @@ import javax.inject.Inject
 
 private const val CHANNEL_ID    = "x8rgb_service"
 private const val NOTIF_ID      = 1
-private const val TICK_INTERVAL = 100L    // ms; loop period
-private const val REASSERT_MS   = 1000L   // re-send held color: system may overwrite it
-private const val MIN_SEND_GAP  = 100L    // ms; minimum gap between color changes
+private const val TICK_INTERVAL = 50L     // 20 fps
+private const val REASSERT_MS   = 2000L
+private const val MIN_SEND_GAP  = 40L
 
-/**
- * Owns the ring while a color is active.
- *
- * Ownership: this service writes to the ring only while it has a color to show.
- * When idle it writes nothing, except one OFF when it hands the ring back.
- *
- * Ring mode: the system switch (settings_strip_light_enable) is set from the saved mode.
- * RingMode.OFF stops this service from writing colors.
- */
 @AndroidEntryPoint
 class RgbForegroundService : Service() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var ruleRepository: RuleRepository
+    @Inject lateinit var effectEngine: EffectEngine
+    @Inject lateinit var motionManager: MotionManager
+    @Inject lateinit var fftProcessor: FftProcessor
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    @Volatile private var currentColor: RgbColor = RgbColor.OFF
+    @Volatile private var targetColor: RgbColor = RgbColor.OFF
+    @Volatile private var targetAnimationId: Int = EffectEngine.EFFECT_STATIC
     @Volatile private var settings: AppSettingsEntity = AppSettingsEntity()
-    @Volatile private var testing = false     // paused by a debug case
+    @Volatile private var testing = false
+
+    @Volatile private var musicColor: RgbColor = RgbColor.OFF
+    private var musicSyncJob: Job? = null
 
     private var lastRgb = -1
     private var lastSentAt = 0L
-    private var ownsRing = false              // true only after we successfully wrote a color
-    private var reassertCount = 0
+    private var ownsRing = false
+    private var tick = 0L
     private var debugRunner: DebugTestRunner? = null
 
     override fun onCreate() {
         super.onCreate()
         val debug = DebugTestRunner.isEnabled(this)
         if (debug) DiagLog.attach(File(filesDir, "x8rgb_diag.log"))
+        
         createNotificationChannel()
         startForeground(NOTIF_ID, buildNotification())
+        
         observeSettings()
         startEffectLoop()
         applySavedRingMode()
+        
         if (debug) {
-            debugRunner = DebugTestRunner(this, ruleRepository) { debugPause(it) }.also { it.register() }
-            DiagLog.log("svc", "debug build; test runner registered")
+            debugRunner = DebugTestRunner(this, ruleRepository) { testing = it }.also { it.register() }
         }
-        DiagLog.log("svc", "created pid=${Process.myPid()}")
+        DiagLog.log("svc", "RGB service started v0019")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_SET_COLOR -> {
                 val packed = intent.getLongExtra(EXTRA_COLOR_PACKED, RgbColor.OFF.packed)
-                currentColor = RgbColor(packed)
+                targetColor = RgbColor(packed)
+                targetAnimationId = intent.getIntExtra(EXTRA_ANIMATION_ID, EffectEngine.EFFECT_STATIC)
+                tick = 0L
+                DiagLog.log("svc", "target color set: anim=$targetAnimationId")
             }
             ACTION_STOP -> {
                 stopSelf()
                 return START_NOT_STICKY
             }
         }
-        // START_STICKY: system restarts the service after a kill
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        releaseRing()                          // synchronous; must run before scope.cancel()
+        releaseRing()
+        motionManager.stop()
+        stopMusicSync()
         debugRunner?.unregister()
-        DiagLog.log("svc", "destroyed")
         scope.cancel()
         super.onDestroy()
     }
 
-    /** Debug hook (called only by DebugTestRunner): pause the loop and forget the last value. */
-    fun debugPause(paused: Boolean) {
-        testing = paused
-        if (!paused) lastRgb = -1
-    }
-
-    // ── Ring mode ─────────────────────────────────────────────────────────────
-
     private fun applySavedRingMode() {
-        if (!RingSwitch.hasPermission(this)) {
-            DiagLog.log("sys", "WRITE_SECURE_SETTINGS missing; system switch not changed")
-            return
-        }
+        if (!RingSwitch.hasPermission(this)) return
         val mode = RingSwitch.savedMode(this)
-        DiagLog.log("sys", "apply mode=$mode ok=${RingSwitch.set(this, mode)}")
+        RingSwitch.set(this, mode)
     }
-
-    // ── Loop ──────────────────────────────────────────────────────────────────
 
     private fun startEffectLoop() {
         scope.launch {
             while (isActive) {
                 if (testing) { delay(TICK_INTERVAL); continue }
+                
                 val mode = RingSwitch.savedMode(this@RgbForegroundService)
-                val want = settings.masterEnabled && mode != RingMode.OFF &&
-                        !isQuietHours() && hasLight(currentColor)
-                if (want) applyColor(currentColor) else releaseRing()
+                val master = settings.masterEnabled && mode != RingMode.OFF && !isQuietHours()
+                
+                if (master) {
+                    // 1. Notification priority (Rules)
+                    if (targetColor != RgbColor.OFF || targetAnimationId != EffectEngine.EFFECT_STATIC) {
+                        val colorToShow = if (targetAnimationId == EffectEngine.EFFECT_STATIC) {
+                            targetColor
+                        } else {
+                            effectEngine.compute(targetAnimationId, tick, targetColor)
+                        }
+                        applyColor(colorToShow)
+                        tick++
+                    } 
+                    // 2. Music Sync priority
+                    else if (settings.musicSyncEnabled && (musicColor.r or musicColor.g or musicColor.b) != 0) {
+                        applyColor(musicColor)
+                    }
+                    // 3. Motion Reactive priority
+                    else if (settings.motionReactiveEnabled) {
+                        val intensity = motionManager.motionIntensity.value
+                        if (intensity > 0.05f) {
+                            val c = RgbColor((100 * intensity).toInt(), (150 * intensity).toInt(), 255)
+                            applyColor(c)
+                        } else {
+                            releaseRing()
+                        }
+                    } 
+                    else {
+                        releaseRing()
+                    }
+                } else {
+                    releaseRing()
+                }
+                
                 delay(TICK_INTERVAL)
             }
         }
@@ -147,50 +175,111 @@ class RgbForegroundService : Service() {
 
     private fun observeSettings() {
         scope.launch {
-            settingsRepository.observe().collect { s -> settings = s ?: AppSettingsEntity() }
+            settingsRepository.observe().collectLatest { s -> 
+                settings = s ?: AppSettingsEntity()
+                
+                if (settings.motionReactiveEnabled && settings.masterEnabled) {
+                    motionManager.start()
+                } else {
+                    motionManager.stop()
+                }
+
+                if (settings.musicSyncEnabled && settings.masterEnabled) {
+                    startMusicSync()
+                } else {
+                    stopMusicSync()
+                }
+            }
         }
     }
 
-    // ── Ring output ───────────────────────────────────────────────────────────
+    private fun startMusicSync() {
+        if (musicSyncJob != null) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            DiagLog.log("music", "RECORD_AUDIO permission missing")
+            return
+        }
 
-    private fun hasLight(c: RgbColor): Boolean = (c.r or c.g or c.b) != 0
+        musicSyncJob = scope.launch(Dispatchers.IO) {
+            val sampleRate = 44100
+            val bufferSize = AudioRecord.getMinBufferSize(
+                sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+            ).coerceAtLeast(2048)
+            
+            var audioRecord: AudioRecord? = null
+            try {
+                audioRecord = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize
+                )
+                
+                if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+                    DiagLog.log("music", "AudioRecord init failed")
+                    return@launch
+                }
 
-    /** Writes the color through miui.lights.ILightsManager (see MiuiLightsBinder). */
+                audioRecord.startRecording()
+                val readBuffer = ShortArray(1024)
+                val floatBuffer = FloatArray(1024)
+                
+                while (isActive && settings.musicSyncEnabled) {
+                    val read = audioRecord.read(readBuffer, 0, readBuffer.size)
+                    if (read > 0) {
+                        for (i in 0 until read) {
+                            floatBuffer[i] = readBuffer[i] / 32768f
+                        }
+                        musicColor = fftProcessor.process(floatBuffer.copyOfRange(0, read), sampleRate)
+                    }
+                    delay(40)
+                }
+            } catch (e: Exception) {
+                DiagLog.log("music", "AudioRecord error: ${e.message}")
+            } finally {
+                runCatching {
+                    audioRecord?.stop()
+                    audioRecord?.release()
+                }
+                musicColor = RgbColor.OFF
+            }
+        }
+    }
+
+    private fun stopMusicSync() {
+        musicSyncJob?.cancel()
+        musicSyncJob = null
+    }
+
     private fun applyColor(color: RgbColor) {
-        val k = settings.brightness / 255f           // user slider scales the color
-        val rgb = ((color.r * k).toInt() shl 16) or
-                ((color.g * k).toInt() shl 8) or
-                (color.b * k).toInt()
+        val k = settings.brightness / 255f
+        val r = (color.r * k).toInt().coerceIn(0, 255)
+        val g = (color.g * k).toInt().coerceIn(0, 255)
+        val b = (color.b * k).toInt().coerceIn(0, 255)
+        val rgb = (r shl 16) or (g shl 8) or b
+        
         val now = SystemClock.elapsedRealtime()
         val changed = rgb != lastRgb
         val due = now - lastSentAt >= REASSERT_MS
+        
         if (!changed && !due) return
         if (changed && now - lastSentAt < MIN_SEND_GAP) return
-        if (changed) {
-            DiagLog.log("color", "rgb=%06X".format(rgb))
-        } else {
-            reassertCount++
-            DiagLog.log("color", "reassert rgb=%06X count=%d".format(rgb, reassertCount))
-        }
-        lastSentAt = now
+
         if (MiuiLightsBinder.setColor(rgb)) {
             lastRgb = rgb
+            lastSentAt = now
             ownsRing = true
-        } else {
-            DiagLog.log("color", "rejected rgb=%06X".format(rgb))
         }
     }
 
-    /** Hands the ring back: one OFF write if we were the last writer, nothing otherwise. */
     private fun releaseRing() {
         if (!ownsRing) return
         ownsRing = false
         lastRgb = -1
-        DiagLog.log("color", "release -> off")
+        tick = 0L
         MiuiLightsBinder.off()
     }
-
-    // ── Quiet hours ───────────────────────────────────────────────────────────
 
     private fun isQuietHours(): Boolean {
         if (!settings.quietHoursEnabled) return false
@@ -198,23 +287,24 @@ class RgbForegroundService : Service() {
         val start = settings.quietHoursStart
         val end = settings.quietHoursEnd
         return if (start <= end) hour in start until end
-        else hour >= start || hour < end      // spans midnight
+        else hour >= start || hour < end
     }
-
-    // ── Foreground notification ───────────────────────────────────────────────
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "RGB Service",
+            "RGB Service Status",
             NotificationManager.IMPORTANCE_MIN
-        ).apply { setShowBadge(false) }
+        ).apply { 
+            setShowBadge(false)
+        }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("x8RGB active")
+            .setContentTitle("X8RGB")
+            .setContentText("การควบคุมไฟ RGB กำลังทำงาน")
             .setSmallIcon(R.drawable.ic_led_ring)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setSilent(true)
@@ -225,5 +315,6 @@ class RgbForegroundService : Service() {
         const val ACTION_SET_COLOR   = "com.x8rgb.SET_COLOR"
         const val ACTION_STOP        = "com.x8rgb.STOP"
         const val EXTRA_COLOR_PACKED = "color_packed"
+        const val EXTRA_ANIMATION_ID = "animation_id"
     }
 }

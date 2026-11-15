@@ -31,4 +31,12 @@ class SettingsRepository @Inject constructor(private val dao: AppSettingsDao) {
             quietHoursEnd     = end.coerceIn(0, 23),
         ))
     }
+
+    suspend fun updateMusicSync(enabled: Boolean) {
+        dao.upsert(get().copy(musicSyncEnabled = enabled))
+    }
+
+    suspend fun updateMotionReactive(enabled: Boolean) {
+        dao.upsert(get().copy(motionReactiveEnabled = enabled))
+    }
 }

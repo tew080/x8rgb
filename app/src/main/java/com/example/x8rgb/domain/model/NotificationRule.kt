@@ -1,8 +1,10 @@
 package com.x8rgb.domain.model
 
+import com.x8rgb.domain.engine.EffectEngine
+
 /**
- * Priority: CONTACT > GROUP > APP (matches ZenithOrbitRGB / Aura spec).
- * Lower ordinal = higher priority in Comparable.
+ * Priority: CONTACT > GROUP > APP.
+ * Lower ordinal = higher priority.
  */
 enum class RuleType { CONTACT, GROUP, APP }
 
@@ -13,6 +15,6 @@ data class NotificationRule(
     val key: String,
     val displayName: String,
     val color: RgbColor,
-    val animationId: Int      = 0,   // index into EffectEngine.EFFECTS
+    val animationId: Int      = EffectEngine.EFFECT_STATIC,
     val isEnabled: Boolean    = true,
 )

@@ -1,10 +1,11 @@
 package com.x8rgb.system
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
-import android.service.notification.NotificationListenerService
+import androidx.core.content.ContextCompat
 import com.x8rgb.service.RgbNotificationListener
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -18,6 +19,8 @@ class PermissionStateChecker @Inject constructor(
     data class PermissionState(
         val notificationListener: Boolean,
         val writeSecureSettings: Boolean,
+        val postNotifications: Boolean,
+        val recordAudio: Boolean,
         val shizukuAvailable: Boolean,
         val shizukuGranted: Boolean,
     )
@@ -25,9 +28,19 @@ class PermissionStateChecker @Inject constructor(
     fun check(): PermissionState = PermissionState(
         notificationListener  = isNotificationListenerEnabled(),
         writeSecureSettings   = brightnessController.hasPermission(),
+        postNotifications     = isPostNotificationsEnabled(),
+        recordAudio           = isPermissionGranted(Manifest.permission.RECORD_AUDIO),
         shizukuAvailable      = ShizukuGrantHelper.isShizukuInstalled(ctx),
         shizukuGranted        = ShizukuGrantHelper.isGranted(ctx),
     )
+
+    private fun isPermissionGranted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun isPostNotificationsEnabled(): Boolean {
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+        return nm.areNotificationsEnabled()
+    }
 
     private fun isNotificationListenerEnabled(): Boolean {
         val flat = Settings.Secure.getString(ctx.contentResolver, "enabled_notification_listeners")
