@@ -10,12 +10,17 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.ContentResolver
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.IBinder
 import android.os.Process
+import android.provider.Settings
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.x8rgb.R
@@ -30,6 +35,8 @@ import com.x8rgb.system.MiuiLightsBinder
 import com.x8rgb.system.MotionManager
 import com.x8rgb.system.RingMode
 import com.x8rgb.system.RingSwitch
+import com.x8rgb.system.SystemLightGuard
+import com.x8rgb.system.MusicLightManager
 import com.x8rgb.util.DiagLog
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +55,7 @@ import javax.inject.Inject
 private const val CHANNEL_ID    = "x8rgb_service"
 private const val NOTIF_ID      = 1
 private const val TICK_INTERVAL = 50L     // 20 fps
-private const val REASSERT_MS   = 2000L
+private const val REASSERT_MS   = 400L   // system paints ring often; re-assert ownership
 private const val MIN_SEND_GAP  = 40L
 
 @AndroidEntryPoint
@@ -59,6 +66,7 @@ class RgbForegroundService : Service() {
     @Inject lateinit var effectEngine: EffectEngine
     @Inject lateinit var motionManager: MotionManager
     @Inject lateinit var fftProcessor: FftProcessor
+    @Inject lateinit var musicLightManager: MusicLightManager
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -75,6 +83,8 @@ class RgbForegroundService : Service() {
     private var ownsRing = false
     private var tick = 0L
     private var debugRunner: DebugTestRunner? = null
+    private var lightObserver: ContentObserver? = null
+    private var suppressedSystem = false
 
     override fun onCreate() {
         super.onCreate()
@@ -87,6 +97,8 @@ class RgbForegroundService : Service() {
         observeSettings()
         startEffectLoop()
         applySavedRingMode()
+        installLightObserver()
+        suppressSystemCompetitors()
         
         if (debug) {
             debugRunner = DebugTestRunner(this, ruleRepository) { testing = it }.also { it.register() }
@@ -117,6 +129,8 @@ class RgbForegroundService : Service() {
         releaseRing()
         motionManager.stop()
         stopMusicSync()
+        uninstallLightObserver()
+        // leave charging LED off; user can re-enable in system settings if wanted
         debugRunner?.unregister()
         scope.cancel()
         super.onDestroy()
@@ -126,6 +140,36 @@ class RgbForegroundService : Service() {
         if (!RingSwitch.hasPermission(this)) return
         val mode = RingSwitch.savedMode(this)
         RingSwitch.set(this, mode)
+    }
+
+    /** Kill competing HyperOS painters while we drive the ring. */
+    private fun suppressSystemCompetitors() {
+        if (suppressedSystem) return
+        val okCharge = SystemLightGuard.suppressChargingLed(this)
+        val n = runCatching { musicLightManager.disableAllSystemMusicLights() }.getOrDefault(0)
+        suppressedSystem = okCharge || n > 0
+        DiagLog.log("sys", "suppress competitors charge=$okCharge musicPkgs=$n snap=${SystemLightGuard.snapshot(this)}")
+    }
+
+    private fun installLightObserver() {
+        if (lightObserver != null) return
+        val obs = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                // System rewrote a light key → force next tick to re-send color
+                lastRgb = -1
+                DiagLog.log("sys", "light key changed; force reassert ${SystemLightGuard.snapshot(this@RgbForegroundService)}")
+            }
+        }
+        lightObserver = obs
+        val cr: ContentResolver = contentResolver
+        for (k in SystemLightGuard.WATCH_KEYS) {
+            cr.registerContentObserver(Settings.Global.getUriFor(k), false, obs)
+        }
+    }
+
+    private fun uninstallLightObserver() {
+        lightObserver?.let { runCatching { contentResolver.unregisterContentObserver(it) } }
+        lightObserver = null
     }
 
     private fun startEffectLoop() {
@@ -194,9 +238,12 @@ class RgbForegroundService : Service() {
 
                 if (settings.musicSyncEnabled && settings.masterEnabled) {
                     startMusicSync()
+                    // re-kill system music painters each time setting flips on
+                    musicLightManager.disableAllSystemMusicLights()
                 } else {
                     stopMusicSync()
                 }
+                if (settings.masterEnabled) suppressSystemCompetitors()
             }
         }
     }
