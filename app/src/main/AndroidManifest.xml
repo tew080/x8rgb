@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.BODY_SENSORS" />
 
     <application
-        android:name=".X8RGBApp"
+        android:name="com.x8rgb.X8RGBApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -25,7 +25,7 @@
         android:theme="@style/Theme.X8RGB">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.x8rgb.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -35,7 +35,7 @@
         </activity>
 
         <service
-            android:name=".service.RgbNotificationListener"
+            android:name="com.x8rgb.service.RgbNotificationListener"
             android:exported="true"
             android:label="@string/notification_listener_label"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
@@ -45,7 +45,7 @@
         </service>
 
         <service
-            android:name=".service.RgbForegroundService"
+            android:name="com.x8rgb.service.RgbForegroundService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -62,7 +62,7 @@
             tools:ignore="ExportedContentProvider" />
 
         <receiver
-            android:name=".service.BootReceiver"
+            android:name="com.x8rgb.service.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
