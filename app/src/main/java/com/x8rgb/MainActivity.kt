@@ -5,6 +5,8 @@
 package com.x8rgb
 
 import android.Manifest
+import android.app.LocaleManager
+import android.os.LocaleList
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -47,13 +49,16 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,15 +72,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.x8rgb.domain.engine.EffectEngine
-import com.x8rgb.domain.model.NotificationRule
 import com.x8rgb.domain.model.RgbColor
 import com.x8rgb.service.RgbForegroundService
 import com.x8rgb.system.RingMode
-import com.x8rgb.ui.AppItem
 import com.x8rgb.ui.HsvColorPicker
 import com.x8rgb.ui.MainUiState
 import com.x8rgb.ui.MainViewModel
-import com.x8rgb.ui.RING_PALETTE
+import com.x8rgb.ui.EffectPickerDialog
+import com.x8rgb.ui.effectName
 import com.x8rgb.ui.theme.X8rgbTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.foundation.Canvas
@@ -101,10 +105,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var destination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -117,23 +123,50 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
         else context.stopService(intent)
     }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
-        HomeScreen(
-            state = state,
-            modifier = Modifier.padding(inner),
-            onMaster = ::setMaster,
-            onBrightness = viewModel::updateBrightness,
-            onMode = { viewModel.setRingMode(it) },
-            onBaseColor = viewModel::setBaseColor,
-            onAmbientEffect = viewModel::setAmbientEffect,
-            onForceHold = viewModel::setForceHold,
-            onForceHoldColor = viewModel::setForceHoldColor,
-            onForceHoldEffect = viewModel::setForceHoldEffect,
-            onRequestShizuku = viewModel::requestShizukuPermission,
-            onGrantShizuku = viewModel::grantViaShizuku,
-            onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-            onTestHardware = viewModel::testHardware
-        )
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
+            AppDestinations.entries.forEach {
+                item(
+                    icon = { Icon(painterResource(it.icon), contentDescription = stringResource(it.labelRes)) },
+                    label = { Text(stringResource(it.labelRes)) },
+                    selected = it == destination,
+                    onClick = { destination = it },
+                )
+            }
+        },
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    title = { Text(stringResource(destination.labelRes), style = MaterialTheme.typography.titleLarge) },
+                )
+            },
+        ) { inner ->
+            val modifier = Modifier.padding(inner)
+            when (destination) {
+                AppDestinations.HOME -> HomeScreen(
+                    state = state,
+                    modifier = modifier,
+                    onMaster = ::setMaster,
+                    onBrightness = viewModel::updateBrightness,
+                    onMode = { viewModel.setRingMode(it) },
+                    onBaseColor = viewModel::setBaseColor,
+                    onAmbientEffect = viewModel::setAmbientEffect,
+                    onForceHold = viewModel::setForceHold,
+                    onForceHoldColor = viewModel::setForceHoldColor,
+                    onForceHoldEffect = viewModel::setForceHoldEffect,
+                    onRequestShizuku = viewModel::requestShizukuPermission,
+                    onGrantShizuku = viewModel::grantViaShizuku,
+                    onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                    onTestHardware = viewModel::testHardware
+                )
+                AppDestinations.SETTINGS -> SettingsScreen(
+                    state = state,
+                    modifier = modifier,
+                )
+            }
+        }
     }
 }
 
@@ -161,8 +194,6 @@ private fun HomeScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-
         if (!state.isLoading && !allPermissionsOk(state)) {
             PermissionsCard(state, onRequestShizuku, onGrantShizuku, onRequestAudio)
         }
@@ -396,26 +427,13 @@ private fun LockCard(
     }
 
     if (pickEffect) {
-        AlertDialog(
-            onDismissRequest = { pickEffect = false },
-            confirmButton = { TextButton(onClick = { pickEffect = false }) { Text(stringResource(R.string.btn_cancel)) } },
-            title = { Text(stringResource(R.string.dialog_select_effect)) },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(LOCK_EFFECT_ORDER) { id ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onEffect(id); pickEffect = false }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = effectId == id, onClick = { onEffect(id); pickEffect = false })
-                            Text(lockEffectLabel(id))
-                        }
-                    }
-                }
-            },
+        EffectPickerDialog(
+            title = stringResource(R.string.dialog_select_effect),
+            ids = LOCK_EFFECT_ORDER,
+            selectedId = effectId,
+            onPick = { onEffect(it); pickEffect = false },
+            onDismiss = { pickEffect = false },
+            labelOf = { lockEffectLabel(it) },
         )
     }
     if (pickColor) {
@@ -434,8 +452,7 @@ private val LOCK_EFFECT_ORDER: List<Int> =
 
 @Composable
 private fun lockEffectLabel(id: Int): String =
-    if (id == EffectEngine.EFFECT_STATIC) stringResource(R.string.lock_no_effect)
-    else EffectEngine.EFFECT_NAMES.getOrElse(id) { "Static" }
+    if (id == EffectEngine.EFFECT_STATIC) stringResource(R.string.lock_no_effect) else effectName(id)
 
 @Composable
 private fun HsvPickerDialog(
@@ -473,7 +490,6 @@ private fun AmbientEffectCard(
 ) {
     var pickEffect by remember { mutableStateOf(false) }
     var pickColor by remember { mutableStateOf(false) }
-    val name = EffectEngine.EFFECT_NAMES.getOrElse(effectId) { "Static" }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -484,7 +500,7 @@ private fun AmbientEffectCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.label_ambient_effect, name), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.label_ambient_effect, effectName(effectId)), style = MaterialTheme.typography.bodyLarge)
                 TextButton(onClick = { pickEffect = true }) { Text(stringResource(R.string.btn_pick_effect)) }
             }
             Row(
@@ -504,26 +520,12 @@ private fun AmbientEffectCard(
     }
 
     if (pickEffect) {
-        AlertDialog(
-            onDismissRequest = { pickEffect = false },
-            confirmButton = { TextButton(onClick = { pickEffect = false }) { Text(stringResource(R.string.btn_cancel)) } },
-            title = { Text(stringResource(R.string.dialog_select_effect)) },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(EffectEngine.SELECTABLE_IDS) { id ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onEffect(id); pickEffect = false }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = effectId == id, onClick = { onEffect(id); pickEffect = false })
-                            Text(EffectEngine.EFFECT_NAMES[id])
-                        }
-                    }
-                }
-            },
+        EffectPickerDialog(
+            title = stringResource(R.string.dialog_select_effect),
+            ids = EffectEngine.SELECTABLE_IDS,
+            selectedId = effectId,
+            onPick = { onEffect(it); pickEffect = false },
+            onDismiss = { pickEffect = false },
         )
     }
     if (pickColor) {
@@ -534,175 +536,6 @@ private fun AmbientEffectCard(
             onDismiss = { pickColor = false },
         )
     }
-}
-
-@Composable
-private fun RulesScreen(
-    state: MainUiState,
-    modifier: Modifier,
-    onAdd: (AppItem) -> Unit,
-    onUpdate: (NotificationRule, RgbColor, Int) -> Unit,
-    onDelete: (Long) -> Unit,
-    onPreview: (NotificationRule) -> Unit
-) {
-    var pickerOpen by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<NotificationRule?>(null) }
-
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(stringResource(R.string.rules_title), style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.rules_desc), style = MaterialTheme.typography.bodySmall)
-        Button(onClick = { pickerOpen = true }) { Text(stringResource(R.string.btn_add_app)) }
-
-        if (state.rules.isEmpty()) {
-            Text(stringResource(R.string.empty_rules), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 16.dp))
-        }
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.rules, key = { it.id }) { rule ->
-                RuleRow(
-                    rule = rule,
-                    onEdit = { editing = rule },
-                    onDelete = { onDelete(rule.id) },
-                )
-            }
-        }
-    }
-
-    if (pickerOpen) {
-        AppPickerDialog(
-            apps = state.appList,
-            onPick = {
-                onAdd(it)
-                pickerOpen = false
-            },
-            onDismiss = { pickerOpen = false },
-        )
-    }
-
-    editing?.let { rule ->
-        EditRuleDialog(
-            rule = rule,
-            onSave = { color, animId ->
-                onUpdate(rule, color, animId)
-                editing = null
-            },
-            onPreview = { onPreview(rule.copy(color = it.first, animationId = it.second)) },
-            onDismiss = { editing = null },
-        )
-    }
-}
-
-@Composable
-private fun RuleRow(rule: NotificationRule, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ColorDot(rule.color, selected = false, size = 32.dp, onClick = onEdit)
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f).clickable(onClick = onEdit)) {
-                Text(rule.displayName, style = MaterialTheme.typography.titleMedium)
-                val effectName = EffectEngine.EFFECT_NAMES.getOrElse(rule.animationId) { "Static" }
-                Text(
-                    text = "$effectName • ${rule.key}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-            TextButton(onClick = onDelete) { Text(stringResource(R.string.btn_delete), color = MaterialTheme.colorScheme.error) }
-        }
-    }
-}
-
-@Composable
-private fun EditRuleDialog(
-    rule: NotificationRule,
-    onSave: (RgbColor, Int) -> Unit,
-    onPreview: (Pair<RgbColor, Int>) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selectedColor by remember { mutableStateOf(rule.color) }
-    var selectedAnim by remember { mutableStateOf(rule.animationId) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onSave(selectedColor, selectedAnim) }) { Text(stringResource(R.string.btn_save)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) }
-        },
-        title = { 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(rule.displayName)
-                Button(onClick = { onPreview(selectedColor to selectedAnim) }, contentPadding = ButtonDefaults.TextButtonContentPadding) {
-                    Text(stringResource(R.string.btn_preview))
-                }
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.dialog_select_color), style = MaterialTheme.typography.titleSmall)
-                HsvColorPicker(
-                    initial = selectedColor,
-                    onColorChange = { selectedColor = it },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                HorizontalDivider()
-
-                Text(stringResource(R.string.dialog_select_effect), style = MaterialTheme.typography.titleSmall)
-                LazyColumn(modifier = Modifier.height(200.dp)) {
-                    items(EffectEngine.SELECTABLE_IDS) { id ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedAnim = id }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selected = selectedAnim == id, onClick = { selectedAnim = id })
-                            Text(EffectEngine.EFFECT_NAMES[id])
-                        }
-                    }
-                }
-            }
-        }
-    )
-}
-
-@Composable
-private fun AppPickerDialog(
-    apps: List<AppItem>,
-    onPick: (AppItem) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_cancel)) } },
-        title = { Text(stringResource(R.string.dialog_select_app)) },
-        text = {
-            if (apps.isEmpty()) {
-                Text(stringResource(R.string.loading_apps))
-            } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    items(apps, key = { it.packageName }) { app ->
-                        Text(
-                            text = app.label,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onPick(app) }
-                                .padding(vertical = 12.dp),
-                        )
-                    }
-                }
-            }
-        },
-    )
 }
 
 @Composable
@@ -725,15 +558,37 @@ private fun ColorDot(
     )
 }
 
+/** Per-app language: follows the system by default, or forced to Thai / English. */
 @Composable
-private fun SettingsScreen(
-    state: MainUiState,
-    modifier: Modifier,
-    onQuiet: (Boolean, Int, Int) -> Unit,
-    onMusicSync: (Boolean) -> Unit,
-    onMotionReactive: (Boolean) -> Unit
-) {
-    val s = state.settings
+private fun LanguageCard() {
+    val context = LocalContext.current
+    val localeManager = context.getSystemService(LocaleManager::class.java)
+    var selected by remember { mutableStateOf(localeManager.applicationLocales.toLanguageTags()) }
+
+    fun choose(tag: String) {
+        selected = tag
+        localeManager.applicationLocales =
+            if (tag.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(tag)
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+            listOf("" to R.string.lang_system, "th" to R.string.lang_th, "en" to R.string.lang_en).forEach { (tag, labelRes) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { choose(tag) }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = selected == tag, onClick = { choose(tag) })
+                    Text(stringResource(labelRes))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(state: MainUiState, modifier: Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -741,87 +596,37 @@ private fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(stringResource(R.string.nav_settings), style = MaterialTheme.typography.headlineMedium)
+        LanguageCard()
+        PermissionStatusCard(state)
+    }
+}
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.settings_extra_features), style = MaterialTheme.typography.titleMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.settings_music_sync), style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = s.musicSyncEnabled, onCheckedChange = onMusicSync)
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.settings_motion_reactive), style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = s.motionReactiveEnabled, onCheckedChange = onMotionReactive)
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(R.string.settings_quiet_hours), style = MaterialTheme.typography.titleMedium)
-                    Switch(
-                        checked = s.quietHoursEnabled,
-                        onCheckedChange = { onQuiet(it, s.quietHoursStart, s.quietHoursEnd) },
-                    )
-                }
-                HourStepper(
-                    label = stringResource(R.string.label_start),
-                    hour = s.quietHoursStart,
-                    onChange = { onQuiet(s.quietHoursEnabled, it, s.quietHoursEnd) },
-                )
-                HourStepper(
-                    label = stringResource(R.string.label_end),
-                    hour = s.quietHoursEnd,
-                    onChange = { onQuiet(s.quietHoursEnabled, s.quietHoursStart, it) },
-                )
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.status_title), style = MaterialTheme.typography.titleMedium)
-                
-                val savedModeLabel = modeLabel(state.ringMode)
-                Text(stringResource(R.string.status_saved_mode, savedModeLabel), style = MaterialTheme.typography.bodySmall)
-                
-                val sysModeLabel = if (state.systemMode != null) modeLabel(state.systemMode) else stringResource(R.string.state_unknown)
-                Text(
-                    stringResource(R.string.label_system_state, sysModeLabel),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                
-                val accessLabel = stringResource(if (state.notificationListener) R.string.state_granted else R.string.state_not_granted)
-                Text(
-                    stringResource(R.string.status_notif_access, accessLabel),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+@Composable
+private fun PermissionStatusCard(state: MainUiState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.perm_status_title), style = MaterialTheme.typography.titleMedium)
+            PermissionRow(stringResource(R.string.perm_status_notif), state.notificationListener)
+            PermissionRow(stringResource(R.string.perm_status_post), state.postNotifications)
+            PermissionRow(stringResource(R.string.perm_status_secure), state.writeSecureSettings)
+            PermissionRow(stringResource(R.string.perm_status_audio), state.recordAudio)
         }
     }
 }
 
 @Composable
-private fun HourStepper(label: String, hour: Int, onChange: (Int) -> Unit) {
+private fun PermissionRow(label: String, granted: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$label ${stringResource(R.string.label_hour, hour)}")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { onChange((hour + 23) % 24) }) { Text(stringResource(R.string.btn_hour_minus)) }
-            TextButton(onClick = { onChange((hour + 1) % 24) }) { Text(stringResource(R.string.btn_hour_plus)) }
-        }
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            stringResource(if (granted) R.string.state_granted else R.string.state_not_granted),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+        )
     }
 }
 
@@ -893,6 +698,5 @@ private fun previewFrame(s: AppSettingsEntity, mode: RingMode, t: Long, engine: 
 
 enum class AppDestinations(val labelRes: Int, val icon: Int) {
     HOME(R.string.nav_home, R.drawable.ic_home),
-    RULES(R.string.nav_rules, R.drawable.ic_favorite),
     SETTINGS(R.string.nav_settings, R.drawable.ic_account_box),
 }

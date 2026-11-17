@@ -86,4 +86,16 @@
     <string name="lock_no_effect">ไม่มี (สีเดียว)</string>
     <string name="card_preview_title">ตัวอย่างวงแหวนไฟ (จำลอง)</string>
 
+    <string name="settings_language">ภาษา</string>
+    <string name="lang_system">ตามระบบ</string>
+    <string name="lang_th">ไทย</string>
+    <string name="lang_en">English</string>
+    <string name="effect_fallback">สีคงที่</string>
+    <string name="service_notif_text">กำลังควบคุมไฟวงแหวน</string>
+    <string name="service_channel_name">การควบคุมไฟ</string>
+    <string name="perm_status_title">สถานะสิทธิ์</string>
+    <string name="perm_status_notif">การเข้าถึงการแจ้งเตือน</string>
+    <string name="perm_status_post">การแสดงการแจ้งเตือนของแอป</string>
+    <string name="perm_status_secure">สิทธิ์ควบคุมไฟ</string>
+    <string name="perm_status_audio">สิทธิ์ไมโครโฟน (Music Sync)</string>
 </resources>

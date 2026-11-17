@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="effect_names">
+        <item>Rainbow</item>
+        <item>Pulse</item>
+        <item>Breathe</item>
+        <item>Comet</item>
+        <item>Aurora</item>
+        <item>Ocean</item>
+        <item>Fire</item>
+        <item>Galaxy</item>
+        <item>Lightning</item>
+        <item>Northern Light</item>
+        <item>Static</item>
+        <item>Scan L→R</item>
+        <item>Blink</item>
+        <item>Strobe</item>
+        <item>Wipe</item>
+        <item>Heartbeat</item>
+        <item>Siren</item>
+        <item>Chasing</item>
+        <item>Candle</item>
+        <item>Police</item>
+        <item>Sunrise</item>
+        <item>Twinkle</item>
+        <item>Disco</item>
+        <item>Neon</item>
+        <item>Matrix</item>
+        <item>Lava</item>
+        <item>Raindrop</item>
+        <item>SOS</item>
+        <item>Double Blink</item>
+        <item>Rainbow Wheel</item>
+        <item>Chase Dot</item>
+        <item>Comet Tail</item>
+        <item>Knight Rider</item>
+        <item>Theater</item>
+        <item>Sparkle</item>
+        <item>Dual Spin</item>
+        <item>Fill &amp; Unfill</item>
+        <item>Wave</item>
+        <item>Fire Ring</item>
+    </string-array>
+</resources>

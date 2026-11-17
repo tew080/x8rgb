@@ -319,14 +319,14 @@ class RgbForegroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "RGB Service", NotificationManager.IMPORTANCE_MIN)
+        val channel = NotificationChannel(CHANNEL_ID, getString(R.string.service_channel_name), NotificationManager.IMPORTANCE_MIN)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("X8RGB")
-            .setContentText("กำลังควบคุมไฟวงแหวน")
+            .setContentText(getString(R.string.service_notif_text))
             .setSmallIcon(R.drawable.ic_led_ring)
             .setOngoing(true)
             .build()

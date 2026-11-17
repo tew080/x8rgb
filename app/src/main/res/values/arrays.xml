@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="effect_names">
+        <item>สายรุ้ง</item>
+        <item>ชีพจร</item>
+        <item>หายใจ</item>
+        <item>หางดาวตก</item>
+        <item>ออโรรา</item>
+        <item>มหาสมุทร</item>
+        <item>ไฟ</item>
+        <item>กาแล็กซี</item>
+        <item>ฟ้าผ่า</item>
+        <item>แสงเหนือ</item>
+        <item>สีคงที่</item>
+        <item>สแกนซ้าย→ขวา</item>
+        <item>กะพริบ</item>
+        <item>สโตรบ</item>
+        <item>กวาด</item>
+        <item>หัวใจเต้น</item>
+        <item>ไซเรน</item>
+        <item>ไล่ตาม</item>
+        <item>เทียน</item>
+        <item>ตำรวจ</item>
+        <item>พระอาทิตย์ขึ้น</item>
+        <item>ระยิบระยับ</item>
+        <item>ดิสโก้</item>
+        <item>นีออน</item>
+        <item>เมทริกซ์</item>
+        <item>ลาวา</item>
+        <item>หยดฝน</item>
+        <item>SOS</item>
+        <item>กะพริบคู่</item>
+        <item>ล้อสายรุ้ง</item>
+        <item>จุดไล่</item>
+        <item>หางดาวตก (ต่อเนื่อง)</item>
+        <item>ไนท์ไรเดอร์</item>
+        <item>โรงละคร</item>
+        <item>ประกาย</item>
+        <item>หมุนคู่</item>
+        <item>เติม/ลบ</item>
+        <item>คลื่น</item>
+        <item>วงแหวนไฟ</item>
+    </string-array>
+</resources>
