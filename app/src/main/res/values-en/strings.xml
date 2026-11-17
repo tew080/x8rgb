@@ -58,9 +58,9 @@
     <string name="effect_fallback">Static</string>
     <string name="service_channel_name">Ring light control</string>
     <string name="service_notif_text">Controlling the ring light</string>
-    <string name="about_dev">พัฒนาโดย tew080</string>
-    <string name="about_dev_link">นักพัฒนาบน GitHub</string>
-    <string name="about_source">ซอร์สโค้ด</string>
-    <string name="about_license">สัญญาอนุญาต GNU GPL รุ่น 3</string>
-    <string name="about_license_link">ข้อความสัญญาอนุญาต GPL-3.0</string>
+    <string name="about_dev">Developed by tew080</string>
+    <string name="about_dev_link">Developer on GitHub</string>
+    <string name="about_source">Source code</string>
+    <string name="about_license">Licensed under the GNU GPL version 3</string>
+    <string name="about_license_link">GPL-3.0 license text</string>
 </resources>

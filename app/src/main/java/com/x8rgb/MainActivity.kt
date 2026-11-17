@@ -528,6 +528,8 @@ private fun SettingsScreen(state: MainUiState, modifier: Modifier) {
     ) {
         LanguageCard()
         PermissionStatusCard(state)
+        Spacer(Modifier.height(8.dp))
+        AboutFooter()
     }
 }
 
