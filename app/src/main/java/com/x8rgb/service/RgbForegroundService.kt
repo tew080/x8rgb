@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.database.ContentObserver
+import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -27,6 +29,7 @@ import com.x8rgb.system.SystemLightArbiter
 import com.x8rgb.system.SystemLightGuard
 import com.x8rgb.util.DiagLog
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,6 +45,7 @@ private const val CHANNEL_ID    = "x8rgb_service"
 private const val NOTIF_ID      = 1
 private const val TICK_INTERVAL = 50L     // 20 fps
 private const val YIELD_POLL_MS = 10L     // check fast while another source holds the ring
+private const val MUSIC_HOLD    = "music"  // arbiter key: music playing, the phone's music light owns the ring
 
 @AndroidEntryPoint
 class RgbForegroundService : Service() {
@@ -65,6 +69,14 @@ class RgbForegroundService : Service() {
     private var lastSentAt = 0L
     private var yielding = false
     private var yieldStartedAt = 0L
+    private var musicHeld = false
+    private var pollN = 0L
+    private val audioManager by lazy { getSystemService(AudioManager::class.java) }
+    private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
+        override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
+            syncMusicHold()
+        }
+    }
     @Volatile private var paused = false          // set by DebugTestRunner while a test drives the ring
     private var debugRunner: DebugTestRunner? = null
     private var tick = 0L
@@ -80,6 +92,7 @@ class RgbForegroundService : Service() {
         observeSettings()
         startEffectLoop()
         installLightObserver()
+        audioManager.registerAudioPlaybackCallback(playbackCallback, null)
 
         if (DebugTestRunner.isEnabled(this)) {
             debugRunner = DebugTestRunner(this, ruleRepository) { paused = it }.also { it.register() }
@@ -107,6 +120,7 @@ class RgbForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        audioManager.unregisterAudioPlaybackCallback(playbackCallback)
         debugRunner?.unregister()
         releaseRing()
         motionManager.stop()
@@ -140,8 +154,9 @@ class RgbForegroundService : Service() {
 
     private fun startEffectLoop() {
         scope.launch {
-            while (isActive) {
+            while (isActive) try {
                 if (paused) { delay(TICK_INTERVAL); continue }
+                if (pollN++ % 20L == 0L) syncMusicHold()   // about once a second: safety net for missed callbacks
 
                 // Another source (system notification light, etc.) owns the ring: send nothing.
                 val busy = arbiter.activeReasons()
@@ -201,7 +216,27 @@ class RgbForegroundService : Service() {
                     releaseRing()
                 }
                 delay(TICK_INTERVAL)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Never let one bad tick stop the loop: log it and carry on.
+                DiagLog.log("err", "effect loop: $e")
+                delay(TICK_INTERVAL)
             }
+        }
+    }
+
+    /** Music playing system-wide means the phone's music light paints the ring: yield while it plays. */
+    private fun syncMusicHold() {
+        val playing = audioManager.isMusicActive
+        if (playing) {
+            if (!musicHeld) DiagLog.log("yield", "music playing, yield ring")
+            musicHeld = true
+            arbiter.hold(MUSIC_HOLD)   // re-hold each call so a long song never lets the hold expire
+        } else if (musicHeld) {
+            musicHeld = false
+            arbiter.release(MUSIC_HOLD)
+            DiagLog.log("yield", "music stopped, release ring")
         }
     }
 
