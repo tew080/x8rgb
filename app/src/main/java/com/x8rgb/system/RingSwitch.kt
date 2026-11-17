@@ -8,7 +8,7 @@ import android.util.Log
 enum class RingMode(val id: String, val systemValue: Int) {
     OFF("off", 0),
     ALWAYS("always", 2),
-    FACE_DOWN("face_down", FACE_DOWN_SYSTEM_VALUE);
+    FACE_DOWN("face_down", 2);
 
     companion object {
         fun fromId(id: String?): RingMode =
