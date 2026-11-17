@@ -58,4 +58,9 @@
     <string name="effect_fallback">สีคงที่</string>
     <string name="service_channel_name">การควบคุมไฟ</string>
     <string name="service_notif_text">กำลังควบคุมไฟวงแหวน</string>
+    <string name="about_dev">พัฒนาโดย tew080</string>
+    <string name="about_dev_link">นักพัฒนาบน GitHub</string>
+    <string name="about_source">ซอร์สโค้ด</string>
+    <string name="about_license">สัญญาอนุญาต GNU GPL รุ่น 3</string>
+    <string name="about_license_link">ข้อความสัญญาอนุญาต GPL-3.0</string>
 </resources>

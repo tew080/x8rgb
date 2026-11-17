@@ -600,7 +600,7 @@ private fun AboutFooter() {
     val context = LocalContext.current
     fun open(url: String) {
         runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
         }
     }
     Column(
