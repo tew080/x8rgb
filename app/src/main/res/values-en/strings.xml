@@ -4,7 +4,7 @@
     <string name="nav_home">Home</string>
     <string name="nav_settings">Settings</string>
     <string name="info_action">About this screen</string>
-    <string name="info_home">Home\n\nLight control: turn the app's light control on or off and set brightness.\n\nColor preview: shows the color and effect that are being sent to the real light.\n\nRing mode: choose whether the light is always on, on only when the phone is face down, or off.\n\nAlways-on effect: the effect that plays when there is no notification and no lock.\n\nLock color: shows the chosen color in place of all notifications until the lock is turned off.</string>
+    <string name="info_home">Home\n\nLight control: turn the app\'s light control on or off and set brightness.\n\nColor preview: shows the color and effect that are being sent to the real light.\n\nRing mode: choose whether the light is always on, on only when the phone is face down, or off.\n\nAlways-on effect: the effect that plays when there is no notification and no lock.\n\nLock color: shows the chosen color in place of all notifications until the lock is turned off.</string>
     <string name="info_settings">Settings\n\nLanguage: choose the app language. System default follows the device language.\n\nPermission status: shows whether the permissions the app needs are granted. If any are missing, some lights will not work.</string>
     <string name="perm_required_title">Additional permissions required</string>
     <string name="perm_notif_listener">Notification access is not enabled. The light will not react to notifications.</string>
@@ -34,7 +34,7 @@
     <string name="card_preview_title">Color preview (simulated)</string>
     <string name="card_ring_mode_title">Ring light mode</string>
     <string name="label_system_state">System setting: %s</string>
-    <string name="warning_off">Off. The app's lights will not work.</string>
+    <string name="warning_off">Off. The app\'s lights will not work.</string>
     <string name="mode_off">Off</string>
     <string name="mode_always">Always on</string>
     <string name="mode_face_down">When face down</string>
