@@ -183,11 +183,6 @@ private fun HomeScreen(
             onSelect = onMode,
         )
 
-        BaseAndHoldCard(
-            baseColor = RgbColor(state.settings.baseColorPacked),
-            onBaseColor = onBaseColor,
-        )
-
         LockCard(
             enabled = state.settings.forceHoldEnabled,
             color = RgbColor(state.settings.forceHoldColorPacked),
@@ -353,49 +348,6 @@ private fun RingModeCard(
     }
 }
 
-    @Composable
-    private fun BaseAndHoldCard(
-        baseColor: RgbColor,
-        onBaseColor: (RgbColor) -> Unit,
-    ) {
-        var editBase by remember { mutableStateOf(false) }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.card_base_hold_title), style = MaterialTheme.typography.titleMedium)
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.label_base_color), style = MaterialTheme.typography.bodyMedium)
-                        Text(stringResource(R.string.hint_base_color), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    ColorDot(
-                        color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(40, 40, 40),
-                        selected = false,
-                        size = 40.dp,
-                        onClick = { editBase = true },
-                    )
-                }
-                TextButton(onClick = { onBaseColor(RgbColor.OFF) }) {
-                    Text(stringResource(R.string.btn_clear_base))
-                }
-            }
-        }
-
-        if (editBase) {
-            HsvPickerDialog(
-                title = stringResource(R.string.dialog_base_color),
-                initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
-                onPick = { onBaseColor(it); editBase = false },
-                onDismiss = { editBase = false },
-            )
-        }
-    }
-
 @Composable
 private fun LockCard(
     enabled: Boolean,
@@ -450,7 +402,7 @@ private fun LockCard(
             title = { Text(stringResource(R.string.dialog_select_effect)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(EffectEngine.SELECTABLE_IDS) { id ->
+                    items(LOCK_EFFECT_ORDER) { id ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -475,6 +427,10 @@ private fun LockCard(
         )
     }
 }
+
+/** Lock effect picker order: "no effect" first, then the animated effects. */
+private val LOCK_EFFECT_ORDER: List<Int> =
+    listOf(EffectEngine.EFFECT_STATIC) + EffectEngine.SELECTABLE_IDS.filter { it != EffectEngine.EFFECT_STATIC }
 
 @Composable
 private fun lockEffectLabel(id: Int): String =
