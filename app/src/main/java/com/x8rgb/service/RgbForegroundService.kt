@@ -264,15 +264,13 @@ class RgbForegroundService : Service() {
     }
 
     private fun applyBaseOrRelease() {
-        val base = RgbColor(settings.baseColorPacked)
-        val effectId = settings.ambientEffectId
-        if (base == RgbColor.OFF && effectId == EffectEngine.EFFECT_STATIC) {
+        // Ambient effects supply their own colours; no user-picked base colour.
+        val effectId = effectEngine.sanitize(settings.ambientEffectId)
+        if (effectId == EffectEngine.EFFECT_STATIC) {
             releaseRing()
             return
         }
-        val seed = if (base != RgbColor.OFF) base else RgbColor(255, 255, 255)
-        val frame = if (effectId == EffectEngine.EFFECT_STATIC) seed
-                    else effectEngine.compute(effectId, tick, seed)
+        val frame = effectEngine.compute(effectId, tick, RgbColor(255, 255, 255))
         applyColor(frame)
         tick++
     }
