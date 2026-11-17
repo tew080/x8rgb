@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- DayNight window background: no white/black flash before Compose draws, in either theme -->
-    <style name="Theme.X8RGB" parent="android:Theme.DeviceDefault.DayNight.NoActionBar" />
+    <!-- Light: window background matches the app surface so nothing flashes before Compose draws -->
+    <style name="Theme.X8RGB" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFBFE</item>
+    </style>
 </resources>
