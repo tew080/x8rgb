@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">X8RGB</string>
+    <string name="app_name">Always-On Ring</string>
     <string name="notification_listener_label">X8RGB การเข้าถึงการแจ้งเตือน</string>
     <string name="nav_home">หน้าหลัก</string>
     <string name="nav_settings">ตั้งค่า</string>
