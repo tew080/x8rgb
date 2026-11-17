@@ -19,6 +19,8 @@
     <string name="perm_status_notif">Notification access</string>
     <string name="perm_status_post">App notifications</string>
     <string name="perm_status_secure">Light control permission</string>
+    <string name="perm_restricted_hint">If a permission cannot be granted, enable \"Allow restricted settings\" on the system App info page (⋮ menu), then grant it again.</string>
+    <string name="perm_restricted_btn">Open App info</string>
     <string name="state_granted">Granted</string>
     <string name="state_not_granted">Not granted</string>
     <string name="state_unknown">Unknown</string>

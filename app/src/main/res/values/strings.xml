@@ -19,6 +19,8 @@
     <string name="perm_status_notif">การเข้าถึงการแจ้งเตือน</string>
     <string name="perm_status_post">การแสดงการแจ้งเตือนของแอป</string>
     <string name="perm_status_secure">สิทธิ์ควบคุมไฟ</string>
+    <string name="perm_restricted_hint">ถ้าสิทธิ์บางอย่างให้ไม่ได้ ให้เปิด \"อนุญาตการตั้งค่าที่จำกัด\" ในหน้าข้อมูลแอป (เมนู ⋮) แล้วกลับมาเปิดสิทธิ์อีกครั้ง</string>
+    <string name="perm_restricted_btn">เปิดหน้าข้อมูลแอป</string>
     <string name="state_granted">ได้รับแล้ว</string>
     <string name="state_not_granted">ยังไม่ได้รับ</string>
     <string name="state_unknown">ไม่ทราบ</string>

@@ -45,6 +45,10 @@ cd x8rgb
 - minSdk 34 · target/compileSdk 36  
 - Kotlin · Jetpack Compose · Hilt · Room  
 
+## Install note (Play Protect)
+
+If Android blocks the APK with a Play Protect warning, open **Play Store → profile → Play Protect → Settings** and temporarily turn off **Scan apps with Play Protect**, install the APK, then turn it back on.
+
 ## Architecture
 
 ```

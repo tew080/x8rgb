@@ -576,6 +576,26 @@ private fun PermissionStatusCard(state: MainUiState) {
             PermissionRow(stringResource(R.string.perm_status_notif), state.notificationListener)
             PermissionRow(stringResource(R.string.perm_status_post), state.postNotifications)
             PermissionRow(stringResource(R.string.perm_status_secure), state.writeSecureSettings)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.perm_restricted_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            val context = LocalContext.current
+            TextButton(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.fromParts("package", context.packageName, null)
+                            },
+                        )
+                    }
+                },
+            ) {
+                Text(stringResource(R.string.perm_restricted_btn))
+            }
         }
     }
 }

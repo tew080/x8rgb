@@ -45,6 +45,10 @@ cd x8rgb
 - minSdk 34 · target/compileSdk 36  
 - Kotlin · Jetpack Compose · Hilt · Room  
 
+## หมายเหตุการติดตั้ง (Play Protect)
+
+ถ้าติดตั้ง APK ไม่ได้เพราะ Play Protect เตือน ให้เปิด **Play Store → โปรไฟล์ → Play Protect → การตั้งค่า** แล้วปิด **สแกนแอปด้วย Play Protect** ชั่วคราว ติดตั้งให้เสร็จ แล้วเปิดกลับ
+
 ## สถาปัตยกรรมโดยย่อ
 
 ```
