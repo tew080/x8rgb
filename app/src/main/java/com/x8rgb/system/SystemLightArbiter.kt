@@ -22,7 +22,10 @@ class SystemLightArbiter @Inject constructor() {
         holds[key] = SystemClock.elapsedRealtime() + maxMs
     }
 
-    /** Source finished. Resume after a short grace so a light that re-appears at once does not flicker. */
+    /**
+     * Source finished. Resume after a short grace so a light that re-appears at once does not flicker.
+     * Always schedule grace from *now* (do not keep a far-future MAX_HOLD expiry).
+     */
     fun release(key: String) {
         val resumeAt = SystemClock.elapsedRealtime() + RESUME_GRACE_MS
         holds.computeIfPresent(key) { _, _ -> resumeAt }
@@ -40,8 +43,15 @@ class SystemLightArbiter @Inject constructor() {
         return holds.keys.toList()
     }
 
+    /** True if any hold is still active (cheaper than allocating the list). */
+    fun isHeld(): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        holds.entries.removeIf { it.value <= now }
+        return holds.isNotEmpty()
+    }
+
     companion object {
         const val MAX_HOLD_MS = 10 * 60_000L
-        const val RESUME_GRACE_MS = 150L
+        const val RESUME_GRACE_MS = 80L   // was 150: snappier return to app colour
     }
 }

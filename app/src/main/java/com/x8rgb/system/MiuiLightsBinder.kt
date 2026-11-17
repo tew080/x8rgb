@@ -12,13 +12,19 @@ private const val TX_SET_COLOR = 2
 object MiuiLightsBinder {
     var callerPackage: String = "com.x8rgb"
 
-    private fun service(): IBinder? = try {
-        val m = Class.forName("android.os.ServiceManager")
-            .getDeclaredMethod("getService", String::class.java)
-        m.isAccessible = true
-        (m.invoke(null, DESCRIPTOR) as? IBinder)?.takeIf { it.isBinderAlive }
-    } catch (t: Throwable) {
-        null
+    @Volatile private var cached: IBinder? = null
+
+    /** Cached binder; drops cache when dead so next call re-looks up ServiceManager. */
+    private fun service(): IBinder? {
+        cached?.let { if (it.isBinderAlive) return it else cached = null }
+        return try {
+            val m = Class.forName("android.os.ServiceManager")
+                .getDeclaredMethod("getService", String::class.java)
+            m.isAccessible = true
+            (m.invoke(null, DESCRIPTOR) as? IBinder)?.takeIf { it.isBinderAlive }?.also { cached = it }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     fun setColor(rgb: Int): Boolean = setColorRaw(rgb, 3, 0)
@@ -41,6 +47,7 @@ object MiuiLightsBinder {
             if (ok) reply.readException()
             ok
         } catch (t: Throwable) {
+            cached = null  // force re-lookup next time
             DiagLog.log("binder", "raw arg3=$arg3 arg4=$arg4 -> ${t.javaClass.simpleName}: ${t.message}")
             false
         } finally {
@@ -64,6 +71,7 @@ object MiuiLightsBinder {
             reply.readException()
             "ok reply=${reply.dataAvail()}b"
         } catch (t: Throwable) {
+            cached = null
             "${t.javaClass.simpleName}: ${t.message}"
         } finally {
             data.recycle()

@@ -32,6 +32,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -46,6 +47,9 @@ private const val NOTIF_ID      = 1
 private const val TICK_INTERVAL = 50L     // 20 fps
 private const val YIELD_POLL_MS = 10L     // check fast while another source holds the ring
 private const val MUSIC_HOLD    = "music"  // arbiter key: music playing, the phone's music light owns the ring
+private const val KEEP_ALIVE_MS = 1000L   // re-send same colour while stable
+private const val POST_RESUME_MS = 200L   // after yield: reassert aggressively
+private const val OBSERVER_DEBOUNCE_MS = 250L
 
 @AndroidEntryPoint
 class RgbForegroundService : Service() {
@@ -58,6 +62,9 @@ class RgbForegroundService : Service() {
     @Inject lateinit var arbiter: SystemLightArbiter
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var effectJob: Job? = null
+    private var settingsJob: Job? = null
+    private var observerJob: Job? = null
 
     @Volatile private var targetColor: RgbColor = RgbColor.OFF
     @Volatile private var targetAnimationId: Int = EffectEngine.EFFECT_STATIC
@@ -69,6 +76,8 @@ class RgbForegroundService : Service() {
     private var lastSentAt = 0L
     private var yielding = false
     private var yieldStartedAt = 0L
+    /** Until this elapsedRealtime, identical rgb is still re-sent (post-yield ownership). */
+    private var forceUntil = 0L
     private var musicHeld = false
     private var pollN = 0L
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
@@ -108,6 +117,7 @@ class RgbForegroundService : Service() {
                 targetColor = RgbColor(packed)
                 targetAnimationId = intent.getIntExtra(EXTRA_ANIMATION_ID, EffectEngine.EFFECT_STATIC)
                 tick = 0L
+                lastRgb = -1  // new target must paint even if rgb matches keep-alive cache
             }
             ACTION_STOP -> {
                 stopSelf()
@@ -125,6 +135,9 @@ class RgbForegroundService : Service() {
         releaseRing()
         motionManager.stop()
         uninstallLightObserver()
+        effectJob?.cancel()
+        settingsJob?.cancel()
+        observerJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -133,7 +146,13 @@ class RgbForegroundService : Service() {
         if (lightObserver != null) return
         val obs = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                scope.launch { suppressSystemCompetitors() }
+                // Debounce: system may fire several keys in a burst.
+                observerJob?.cancel()
+                observerJob = scope.launch {
+                    delay(OBSERVER_DEBOUNCE_MS)
+                    suppressSystemCompetitors()
+                    lastRgb = -1   // system may have painted over us
+                }
             }
         }
         lightObserver = obs
@@ -145,6 +164,8 @@ class RgbForegroundService : Service() {
     private fun uninstallLightObserver() {
         lightObserver?.let { contentResolver.unregisterContentObserver(it) }
         lightObserver = null
+        observerJob?.cancel()
+        observerJob = null
     }
 
     private fun suppressSystemCompetitors() {
@@ -153,7 +174,8 @@ class RgbForegroundService : Service() {
     }
 
     private fun startEffectLoop() {
-        scope.launch {
+        effectJob?.cancel()
+        effectJob = scope.launch {
             while (isActive) try {
                 if (paused) { delay(TICK_INTERVAL); continue }
                 if (pollN++ % 20L == 0L) syncMusicHold()   // about once a second: safety net for missed callbacks
@@ -173,6 +195,7 @@ class RgbForegroundService : Service() {
                 if (yielding) {
                     yielding = false
                     lastRgb = -1                       // re-send our colour on this same tick
+                    forceUntil = SystemClock.elapsedRealtime() + POST_RESUME_MS * 5
                     suppressSystemCompetitors()        // the system may have changed its lights meanwhile
                     DiagLog.log("yield", "resume ring after ${SystemClock.elapsedRealtime() - yieldStartedAt} ms")
                 }
@@ -255,14 +278,17 @@ class RgbForegroundService : Service() {
     }
 
     private fun observeSettings() {
-        scope.launch {
+        settingsJob?.cancel()
+        settingsJob = scope.launch {
             settingsRepository.observe().collectLatest { s ->
                 settings = s ?: AppSettingsEntity()
                 if (settings.masterEnabled) {
                     motionManager.start()
                     suppressSystemCompetitors()
+                    lastRgb = -1
                 } else {
                     motionManager.stop()
+                    releaseRing()
                 }
             }
         }
@@ -271,18 +297,30 @@ class RgbForegroundService : Service() {
     private fun applyColor(color: RgbColor) {
         val k = settings.brightness / 255f
         val rgb = ((color.r * k).toInt() shl 16) or ((color.g * k).toInt() shl 8) or (color.b * k).toInt()
-        // Don't hammer the lights service with identical values; re-send at most once a second as a keep-alive.
         val now = SystemClock.elapsedRealtime()
-        if (rgb == lastRgb && now - lastSentAt < 1000L) return
-        val ok = MiuiLightsBinder.setColor(rgb)
-        if (ok) { ownsRing = true; lastRgb = rgb; lastSentAt = now }
-        if (loopN % 40L == 1L) DiagLog.log("apply", "rgb=%06X ok=$ok owns=$ownsRing".format(rgb))
+        val force = now < forceUntil
+        val gap = if (force) POST_RESUME_MS else KEEP_ALIVE_MS
+        // Skip only when stable and same colour; always paint while forceUntil is active.
+        if (!force && rgb == lastRgb && now - lastSentAt < gap) return
+        val ok = MiuiLightsBinder.setColor(rgb) || MiuiLightsBinder.setColor(rgb) // one retry
+        if (ok) {
+            ownsRing = true
+            lastRgb = rgb
+            lastSentAt = now
+        } else {
+            lastRgb = -1  // next tick retries; binder may be recovering
+            if (loopN % 20L == 0L) DiagLog.log("apply", "FAIL rgb=%06X".format(rgb))
+        }
+        if (force || loopN % 40L == 1L) {
+            DiagLog.log("apply", "rgb=%06X ok=$ok force=$force owns=$ownsRing".format(rgb))
+        }
     }
 
     private fun releaseRing() {
         if (!ownsRing) return
         ownsRing = false
         lastRgb = -1
+        forceUntil = 0L
         tick = 0L
         MiuiLightsBinder.off()
     }

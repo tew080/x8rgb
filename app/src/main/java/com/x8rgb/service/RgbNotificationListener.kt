@@ -26,7 +26,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val SERVICE_CHANNEL = "x8rgb_service"
-private const val RECONCILE_MS = 1000L
+private const val RECONCILE_IDLE_MS = 1000L
+private const val RECONCILE_HELD_MS = 200L   // while system holds ring: detect removal fast
 
 @AndroidEntryPoint
 class RgbNotificationListener : NotificationListenerService() {
@@ -61,9 +62,14 @@ class RgbNotificationListener : NotificationListenerService() {
         reconcileJob?.cancel()
         reconcileJob = scope.launch {
             while (isActive) {
-                delay(RECONCILE_MS)
+                delay(if (systemLit.isEmpty()) RECONCILE_IDLE_MS else RECONCILE_HELD_MS)
                 reconcileSystemLit()
             }
+        }
+        // Catch-up: shade may already contain light notifications when we connect.
+        scope.launch {
+            delay(100)
+            seedSystemLitFromShade()
         }
     }
 
@@ -145,6 +151,21 @@ class RgbNotificationListener : NotificationListenerService() {
         }
         for (key in systemLit.filter { it !in present }.toList()) {
             releaseSystemLit(key, "not in shade any more")
+        }
+    }
+
+    /** On (re)connect: any existing SHOW_LIGHTS notifs without our rule should hold the ring. */
+    private fun seedSystemLitFromShade() {
+        val list = try { activeNotifications ?: return } catch (_: Exception) { return }
+        for (sbn in list) {
+            val pkg = sbn.packageName ?: continue
+            val notif = sbn.notification ?: continue
+            if (pkg == packageName) continue
+            if (notif.channelId == SERVICE_CHANNEL) continue
+            if ((notif.flags and Notification.FLAG_SHOW_LIGHTS) == 0) continue
+            val key = contactKey(notif)
+            val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
+            if (rule == null) holdSystemLit(sbn.key, pkg)
         }
     }
 
