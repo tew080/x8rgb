@@ -49,6 +49,10 @@ cd x8rgb
 
 If Android blocks the APK with a Play Protect warning, open **Play Store → profile → Play Protect → Settings** and temporarily turn off **Scan apps with Play Protect**, install the APK, then turn it back on.
 
+## Troubleshooting
+
+If the ring light does not turn on or behaves oddly after a notification, music light, or system update, open the app and tap **Reload ring light** on the Home screen. That re-applies the current effect to the hardware.
+
 ## Architecture
 
 ```
