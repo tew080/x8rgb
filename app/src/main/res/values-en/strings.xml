@@ -1,101 +1,61 @@
 <resources>
     <string name="app_name">X8RGB</string>
-    <string name="notification_listener_label">X8RGB Notification Listener</string>
-
+    <string name="notification_listener_label">X8RGB Notification Access</string>
     <string name="nav_home">Home</string>
-    <string name="nav_rules">Notification rules</string>
     <string name="nav_settings">Settings</string>
-
+    <string name="info_action">About this screen</string>
+    <string name="info_home">Home\n\nLight control: turn the app's light control on or off and set brightness.\n\nColor preview: shows the color and effect that are being sent to the real light.\n\nRing mode: choose whether the light is always on, on only when the phone is face down, or off.\n\nAlways-on effect: the effect that plays when there is no notification and no lock.\n\nLock color: shows the chosen color in place of all notifications until the lock is turned off.</string>
+    <string name="info_settings">Settings\n\nLanguage: choose the app language. System default follows the device language.\n\nPermission status: shows whether the permissions the app needs are granted. If any are missing, some lights will not work.</string>
     <string name="perm_required_title">Additional permissions required</string>
-    <string name="perm_notif_listener">Notification access: not enabled</string>
+    <string name="perm_notif_listener">Notification access is not enabled. The light will not react to notifications.</string>
     <string name="perm_notif_listener_btn">Enable notification access</string>
-    <string name="perm_post_notif">App notifications: off</string>
-    <string name="perm_post_notif_btn">Enable app notifications</string>
-    <string name="perm_audio">Microphone permission (for Music Sync): not enabled</string>
-    <string name="perm_audio_btn">Grant microphone permission</string>
-    <string name="perm_secure_settings">Ring effect control permission not granted</string>
+    <string name="perm_post_notif">App notifications are turned off.</string>
+    <string name="perm_post_notif_btn">Turn on app notifications</string>
+    <string name="perm_secure_settings">Light control permission is not granted.</string>
     <string name="perm_shizuku_grant">Grant via Shizuku</string>
     <string name="perm_shizuku_req">Request permission from Shizuku</string>
-    <string name="perm_adb_instruction">Run via ADB:\nadb shell pm grant com.x8rgb android.permission.WRITE_SECURE_SETTINGS</string>
-
-    <string name="card_service_title">Light control</string>
-    <string name="status_running">Running</string>
-    <string name="status_stopped">Stopped</string>
-    <string name="label_brightness">Brightness: %d</string>
-
-    <string name="card_ring_mode_title">System ring effect</string>
-    <string name="label_system_state">Actual system state: %s</string>
-    <string name="state_unknown">Unavailable</string>
-    <string name="warning_off">Off. App lights will not work until another mode is selected.</string>
-
-    <string name="mode_off">Off</string>
-    <string name="mode_always">Always on</string>
-    <string name="mode_face_down">On when face down</string>
-
-    <string name="rules_title">App notification rules</string>
-    <string name="rules_desc">When a notification arrives, the light changes to the chosen color and effect.</string>
-    <string name="btn_add_app">Add app</string>
-    <string name="empty_rules">No rules yet</string>
-    <string name="btn_delete">Delete</string>
-    <string name="btn_save">Save</string>
-    <string name="btn_cancel">Cancel</string>
-    <string name="btn_preview">Test preview</string>
-    <string name="dialog_select_color">Select color</string>
-    <string name="dialog_select_effect">Select effect</string>
-    <string name="dialog_select_app">Select app</string>
-    <string name="loading_apps">Loading app list...</string>
-
-    <string name="settings_extra_features">Extra features (HyperOS)</string>
-    <string name="settings_music_sync">Music Sync (beat)</string>
-    <string name="settings_motion_reactive">Motion Reactive</string>
-    <string name="settings_quiet_hours">Quiet hours</string>
-    <string name="label_start">Start</string>
-    <string name="label_end">End</string>
-    <string name="label_hour">%02d:00</string>
-    <string name="btn_hour_minus">-1 h</string>
-    <string name="btn_hour_plus">+1 h</string>
-
-    <string name="status_title">Status</string>
-    <string name="status_saved_mode">Saved mode: %s</string>
-    <string name="status_notif_access">Notification access: %s</string>
-    <string name="state_granted">Granted</string>
-    <string name="state_not_granted">Not granted</string>
-
-    <string name="btn_test_ring">Test ring light</string>
-    <string name="test_active">Testing (5 seconds)...</string>
-
-    <string name="card_base_hold_title">Base color &amp; hold</string>
-    <string name="label_base_color">Base color (when no notification)</string>
-    <string name="hint_base_color">The ring holds this color when there are no rule, music, or motion events</string>
-    <string name="btn_clear_base">Clear base color (off when idle)</string>
-    <string name="label_force_hold">Force hold (overrides all)</string>
-    <string name="hint_force_hold">When on, the chosen color overrides notifications, music, and motion until turned off</string>
-    <string name="label_force_color">Locked color</string>
-    <string name="dialog_base_color">Select base color</string>
-    <string name="dialog_force_color">Select locked color</string>
-
-    <string name="card_ambient_title">Always-on effect</string>
-    <string name="hint_ambient">Plays when there is no notification or force hold, using the base color</string>
-    <string name="label_ambient_effect">Effect: %s</string>
-    <string name="label_ambient_color">Effect base color</string>
-    <string name="btn_pick_effect">Choose effect</string>
-
-    <string name="card_lock_title">Lock ring color</string>
-    <string name="hint_lock">Shows the locked color and overrides notifications and music, but pauses while the system shows a light notification</string>
-    <string name="label_lock_effect">Locked effect: %s</string>
-    <string name="lock_no_effect">None (solid color)</string>
-    <string name="card_preview_title">Ring preview (simulated)</string>
-
-    <string name="settings_language">Language</string>
-    <string name="lang_system">System default</string>
-    <string name="lang_th">ไทย</string>
-    <string name="lang_en">English</string>
-    <string name="effect_fallback">Static</string>
-    <string name="service_notif_text">Controlling the ring light</string>
-    <string name="service_channel_name">Ring light control</string>
+    <string name="perm_adb_instruction">Run this command over ADB:\nadb shell pm grant com.x8rgb android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="perm_status_title">Permission status</string>
     <string name="perm_status_notif">Notification access</string>
     <string name="perm_status_post">App notifications</string>
     <string name="perm_status_secure">Light control permission</string>
-    <string name="perm_status_audio">Microphone (Music Sync)</string>
+    <string name="state_granted">Granted</string>
+    <string name="state_not_granted">Not granted</string>
+    <string name="state_unknown">Unknown</string>
+    <string name="settings_language">Language</string>
+    <string name="lang_system">System default</string>
+    <string name="lang_th">ไทย</string>
+    <string name="lang_en">English</string>
+    <string name="card_service_title">Ring light</string>
+    <string name="status_running">On</string>
+    <string name="status_stopped">Off</string>
+    <string name="label_brightness">Brightness: %d</string>
+    <string name="btn_test_ring">Test ring light</string>
+    <string name="card_preview_title">Color preview (simulated)</string>
+    <string name="card_ring_mode_title">Ring light mode</string>
+    <string name="label_system_state">System setting: %s</string>
+    <string name="warning_off">Off. The app's lights will not work.</string>
+    <string name="mode_off">Off</string>
+    <string name="mode_always">Always on</string>
+    <string name="mode_face_down">When face down</string>
+    <string name="card_ambient_title">Always-on effect</string>
+    <string name="hint_ambient">Plays when there is no notification and no lock.</string>
+    <string name="label_ambient_effect">Effect: %s</string>
+    <string name="label_ambient_color">Effect color</string>
+    <string name="btn_pick_effect">Choose effect</string>
+    <string name="card_lock_title">Lock color</string>
+    <string name="hint_lock">Shows the locked color in place of notifications. Pauses while the system shows a light notification.</string>
+    <string name="label_force_hold">Lock color</string>
+    <string name="label_force_color">Locked color</string>
+    <string name="label_lock_effect">Locked effect: %s</string>
+    <string name="lock_no_effect">None (solid color)</string>
+    <string name="dialog_select_effect">Choose effect</string>
+    <string name="dialog_base_color">Choose effect color</string>
+    <string name="dialog_force_color">Choose locked color</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_close">Close</string>
+    <string name="effect_fallback">Static</string>
+    <string name="service_channel_name">Ring light control</string>
+    <string name="service_notif_text">Controlling the ring light</string>
 </resources>

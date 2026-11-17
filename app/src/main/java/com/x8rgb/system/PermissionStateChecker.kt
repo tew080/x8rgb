@@ -20,7 +20,6 @@ class PermissionStateChecker @Inject constructor(
         val notificationListener: Boolean,
         val writeSecureSettings: Boolean,
         val postNotifications: Boolean,
-        val recordAudio: Boolean,
         val shizukuAvailable: Boolean,
         val shizukuGranted: Boolean,
     )
@@ -29,7 +28,6 @@ class PermissionStateChecker @Inject constructor(
         notificationListener  = isNotificationListenerEnabled(),
         writeSecureSettings   = brightnessController.hasPermission(),
         postNotifications     = isPostNotificationsEnabled(),
-        recordAudio           = isPermissionGranted(Manifest.permission.RECORD_AUDIO),
         shizukuAvailable      = ShizukuGrantHelper.isShizukuInstalled(ctx),
         shizukuGranted        = ShizukuGrantHelper.isGranted(ctx),
     )

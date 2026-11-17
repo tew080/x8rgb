@@ -12,7 +12,6 @@ import com.x8rgb.domain.model.NotificationRule
 import com.x8rgb.domain.model.RgbColor
 import com.x8rgb.domain.model.RuleType
 import com.x8rgb.service.RgbForegroundService
-import com.x8rgb.system.MusicLightManager
 import com.x8rgb.system.PermissionStateChecker
 import com.x8rgb.system.RingBrightnessController
 import com.x8rgb.system.RingMode
@@ -54,7 +53,6 @@ data class MainUiState(
     val notificationListener: Boolean = false,
     val writeSecureSettings: Boolean = false,
     val postNotifications: Boolean = true,
-    val recordAudio: Boolean = false,
     val shizukuAvailable: Boolean = false,
     val shizukuGranted: Boolean = false,
     val isLoading: Boolean = true,
@@ -67,7 +65,6 @@ class MainViewModel @Inject constructor(
     private val ruleRepository: RuleRepository,
     private val permissionChecker: PermissionStateChecker,
     private val brightnessController: RingBrightnessController,
-    private val musicLightManager: MusicLightManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -95,7 +92,6 @@ class MainViewModel @Inject constructor(
             notificationListener = p.notificationListener,
             writeSecureSettings = p.writeSecureSettings,
             postNotifications = p.postNotifications,
-            recordAudio = p.recordAudio,
             shizukuAvailable = p.shizukuAvailable,
             shizukuGranted = p.shizukuGranted,
             isLoading = false,
@@ -139,22 +135,6 @@ class MainViewModel @Inject constructor(
     }
 
     fun setRingMode(mode: RingMode): Boolean = RingSwitch.set(context, mode)
-
-    fun updateQuietHours(enabled: Boolean, start: Int, end: Int) {
-        viewModelScope.launch { settingsRepository.updateQuietHours(enabled, start, end) }
-    }
-
-    /** ไม่ปิดไฟเพลงของระบบแล้ว: ให้ระบบใช้งานได้ตามปกติ แอปจะ yield เอง */
-    fun toggleMusicSync(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateMusicSync(enabled)
-            musicLightManager.setPackageEnabled(context.packageName, enabled)
-        }
-    }
-
-    fun toggleMotionReactive(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.updateMotionReactive(enabled) }
-    }
 
     fun setBaseColor(color: RgbColor) {
         viewModelScope.launch { settingsRepository.updateBaseColor(color.packed) }

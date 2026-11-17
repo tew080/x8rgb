@@ -1,101 +1,61 @@
 <resources>
     <string name="app_name">X8RGB</string>
-    <string name="notification_listener_label">X8RGB Notification Listener</string>
-
+    <string name="notification_listener_label">X8RGB การเข้าถึงการแจ้งเตือน</string>
     <string name="nav_home">หน้าหลัก</string>
-    <string name="nav_rules">กฎการแจ้งเตือน</string>
     <string name="nav_settings">ตั้งค่า</string>
-
+    <string name="info_action">ข้อมูลเพิ่มเติม</string>
+    <string name="info_home">หน้าหลัก\n\nเปิดใช้งานไฟวงแหวน: เปิดหรือปิดการควบคุมไฟทั้งหมดของแอป และปรับความสว่าง\n\nตัวอย่างสี: แสดงสีและเอฟเฟกต์ที่กำลังส่งไปยังไฟจริง\n\nโหมดการเปิดไฟ: เลือกว่าจะให้ไฟทำงานตลอดเวลา เฉพาะตอนคว่ำจอ หรือปิด\n\nเอฟเฟกต์พื้นหลัง: เอฟเฟกต์ที่เล่นเมื่อไม่มีการแจ้งเตือนหรือการล็อกสี\n\nล็อกสี: แสดงสีที่เลือกไว้แทนการแจ้งเตือนทั้งหมด จนกว่าจะปิดการล็อก</string>
+    <string name="info_settings">ตั้งค่า\n\nภาษา: เลือกภาษาที่ใช้ในแอป ตามระบบจะใช้ภาษาเดียวกับเครื่อง\n\nสถานะสิทธิ์: แสดงว่าแอปได้รับสิทธิ์ที่จำเป็นหรือยัง ถ้ายังไม่ครบ ไฟบางส่วนจะทำงานไม่ได้</string>
     <string name="perm_required_title">ต้องให้สิทธิ์เพิ่มเติม</string>
-    <string name="perm_notif_listener">การเข้าถึงการแจ้งเตือน: ยังไม่เปิด</string>
+    <string name="perm_notif_listener">ยังไม่ได้เปิดการเข้าถึงการแจ้งเตือน ไฟจะไม่ตอบสนองต่อการแจ้งเตือน</string>
     <string name="perm_notif_listener_btn">เปิดการเข้าถึงการแจ้งเตือน</string>
-    <string name="perm_post_notif">การแสดงการแจ้งเตือนของแอป: ปิดอยู่</string>
+    <string name="perm_post_notif">การแสดงการแจ้งเตือนของแอปถูกปิดอยู่</string>
     <string name="perm_post_notif_btn">เปิดการแจ้งเตือนของแอป</string>
-    <string name="perm_audio">สิทธิ์บันทึกเสียง (ใช้สำหรับ Music Sync): ยังไม่เปิด</string>
-    <string name="perm_audio_btn">ขอสิทธิ์บันทึกเสียง</string>
-    <string name="perm_secure_settings">สิทธิ์ควบคุมเอฟเฟกต์ย้อนแสงยังไม่ได้รับ</string>
+    <string name="perm_secure_settings">ยังไม่ได้สิทธิ์ควบคุมไฟ</string>
     <string name="perm_shizuku_grant">ให้สิทธิ์ผ่าน Shizuku</string>
     <string name="perm_shizuku_req">ขอสิทธิ์จาก Shizuku</string>
-    <string name="perm_adb_instruction">รันคำสั่งผ่าน ADB:\nadb shell pm grant com.x8rgb android.permission.WRITE_SECURE_SETTINGS</string>
-
-    <string name="card_service_title">เปิดการควบคุมไฟ</string>
-    <string name="status_running">กำลังทำงาน</string>
-    <string name="status_stopped">หยุดทำงาน</string>
-    <string name="label_brightness">ความสว่าง: %d</string>
-
-    <string name="card_ring_mode_title">เอฟเฟกต์ย้อนแสงของระบบ</string>
-    <string name="label_system_state">สถานะจริงของระบบ: %s</string>
-    <string name="state_unknown">อ่านไม่ได้</string>
-    <string name="warning_off">ปิดอยู่ ไฟของแอปจะไม่ทำงานจนกว่าจะเลือกโหมดอื่น</string>
-
-    <string name="mode_off">ปิด</string>
-    <string name="mode_always">เปิดตลอด</string>
-    <string name="mode_face_down">เปิดเมื่อคว่ำจอ</string>
-
-    <string name="rules_title">กฎแจ้งเตือนตามแอป</string>
-    <string name="rules_desc">เมื่อมีการแจ้งเตือน ไฟจะเปลี่ยนตามสีและเอฟเฟกต์ที่เลือกไว้</string>
-    <string name="btn_add_app">เพิ่มแอป</string>
-    <string name="empty_rules">ยังไม่มีกฎ</string>
-    <string name="btn_delete">ลบ</string>
-    <string name="btn_save">บันทึก</string>
-    <string name="btn_cancel">ยกเลิก</string>
-    <string name="btn_preview">ทดสอบพรีวิว</string>
-    <string name="dialog_select_color">เลือกสี</string>
-    <string name="dialog_select_effect">เลือกเอฟเฟกต์</string>
-    <string name="dialog_select_app">เลือกแอป</string>
-    <string name="loading_apps">กำลังโหลดรายชื่อแอป...</string>
-
-    <string name="settings_extra_features">ฟีเจอร์เพิ่มเติม (HyperOS)</string>
-    <string name="settings_music_sync">Music Sync (จังหวะเพลง)</string>
-    <string name="settings_motion_reactive">Motion Reactive (ตามการเคลื่อนไหว)</string>
-    <string name="settings_quiet_hours">ช่วงเวลาห้ามรบกวน</string>
-    <string name="label_start">เริ่ม</string>
-    <string name="label_end">สิ้นสุด</string>
-    <string name="label_hour">%02d:00</string>
-    <string name="btn_hour_minus">-1 ชม.</string>
-    <string name="btn_hour_plus">+1 ชม.</string>
-
-    <string name="status_title">สถานะ</string>
-    <string name="status_saved_mode">โหมดที่บันทึก: %s</string>
-    <string name="status_notif_access">สิทธิ์การเข้าถึงการแจ้งเตือน: %s</string>
-    <string name="state_granted">ได้รับแล้ว</string>
-    <string name="state_not_granted">ยังไม่ได้รับ</string>
-
-    <string name="btn_test_ring">ทดสอบวงแหวนไฟ</string>
-    <string name="test_active">กำลังทดสอบ (5 วินาที)...</string>
-
-    <string name="card_base_hold_title">สีพื้นฐาน &amp; ค้างสี</string>
-    <string name="label_base_color">สีพื้นฐาน (เมื่อไม่มีแจ้งเตือน)</string>
-    <string name="hint_base_color">ไฟจะค้างสีนี้เมื่อไม่มีกฎแจ้งเตือน/เพลง/การเคลื่อนไหว</string>
-    <string name="btn_clear_base">ล้างสีพื้นฐาน (ปิดเมื่อ idle)</string>
-    <string name="label_force_hold">บังคับค้างสี (ทับทุกอย่าง)</string>
-    <string name="hint_force_hold">เปิดแล้วสีที่เลือกจะทับ notification / music / motion จนกว่าจะปิด</string>
-    <string name="label_force_color">สีที่บังคับค้าง</string>
-    <string name="dialog_base_color">เลือกสีพื้นฐาน</string>
-    <string name="dialog_force_color">เลือกสีบังคับค้าง</string>
-
-    <string name="card_ambient_title">เอฟเฟกต์ตลอดเวลา</string>
-    <string name="hint_ambient">เล่นเมื่อไม่มีแจ้งเตือน/บังคับค้าง — ใช้สีพื้นฐานเป็นฐาน</string>
-    <string name="label_ambient_effect">เอฟเฟกต์: %s</string>
-    <string name="label_ambient_color">สีฐานของเอฟเฟกต์</string>
-    <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
-
-    <string name="card_lock_title">ล็อกสีวงแหวน</string>
-    <string name="hint_lock">ไฟจะแสดงสีที่ล็อกไว้และทับแจ้งเตือนกับเพลง แต่จะหยุดชั่วคราวเมื่อระบบแจ้งเตือนด้วยไฟ</string>
-    <string name="label_lock_effect">เอฟเฟกต์ล็อก: %s</string>
-    <string name="lock_no_effect">ไม่มี (สีเดียว)</string>
-    <string name="card_preview_title">ตัวอย่างวงแหวนไฟ (จำลอง)</string>
-
-    <string name="settings_language">ภาษา</string>
-    <string name="lang_system">ตามระบบ</string>
-    <string name="lang_th">ไทย</string>
-    <string name="lang_en">English</string>
-    <string name="effect_fallback">สีคงที่</string>
-    <string name="service_notif_text">กำลังควบคุมไฟวงแหวน</string>
-    <string name="service_channel_name">การควบคุมไฟ</string>
+    <string name="perm_adb_instruction">รันคำสั่งนี้ผ่าน ADB:\nadb shell pm grant com.x8rgb android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="perm_status_title">สถานะสิทธิ์</string>
     <string name="perm_status_notif">การเข้าถึงการแจ้งเตือน</string>
     <string name="perm_status_post">การแสดงการแจ้งเตือนของแอป</string>
     <string name="perm_status_secure">สิทธิ์ควบคุมไฟ</string>
-    <string name="perm_status_audio">สิทธิ์ไมโครโฟน (Music Sync)</string>
+    <string name="state_granted">ได้รับแล้ว</string>
+    <string name="state_not_granted">ยังไม่ได้รับ</string>
+    <string name="state_unknown">ไม่ทราบ</string>
+    <string name="settings_language">ภาษา</string>
+    <string name="lang_system">ตามระบบ</string>
+    <string name="lang_th">ไทย</string>
+    <string name="lang_en">English</string>
+    <string name="card_service_title">ใช้งานไฟวงแหวน</string>
+    <string name="status_running">กำลังทำงาน</string>
+    <string name="status_stopped">หยุดทำงาน</string>
+    <string name="label_brightness">ความสว่าง %d</string>
+    <string name="btn_test_ring">ทดสอบไฟวงแหวน</string>
+    <string name="card_preview_title">ตัวอย่างสี (จำลอง)</string>
+    <string name="card_ring_mode_title">โหมดการเปิดไฟ</string>
+    <string name="label_system_state">ค่าที่ระบบตั้งไว้: %s</string>
+    <string name="warning_off">ปิดอยู่ ไฟของแอปจะไม่ทำงาน</string>
+    <string name="mode_off">ปิด</string>
+    <string name="mode_always">เปิดตลอดเวลา</string>
+    <string name="mode_face_down">เปิดเมื่อคว่ำจอ</string>
+    <string name="card_ambient_title">เอฟเฟกต์พื้นหลัง</string>
+    <string name="hint_ambient">เล่นเมื่อไม่มีการแจ้งเตือนหรือการล็อกสี</string>
+    <string name="label_ambient_effect">เอฟเฟกต์: %s</string>
+    <string name="label_ambient_color">สีของเอฟเฟกต์</string>
+    <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
+    <string name="card_lock_title">ล็อกสี</string>
+    <string name="hint_lock">แสดงสีที่ล็อกไว้แทนการแจ้งเตือน และหยุดชั่วคราวเมื่อระบบแจ้งเตือนด้วยไฟ</string>
+    <string name="label_force_hold">เปิดล็อกสี</string>
+    <string name="label_force_color">สีที่ล็อก</string>
+    <string name="label_lock_effect">เอฟเฟกต์ล็อก: %s</string>
+    <string name="lock_no_effect">ไม่มี (สีเดียว)</string>
+    <string name="dialog_select_effect">เลือกเอฟเฟกต์</string>
+    <string name="dialog_base_color">เลือกสีของเอฟเฟกต์</string>
+    <string name="dialog_force_color">เลือกสีที่ล็อก</string>
+    <string name="btn_save">บันทึก</string>
+    <string name="btn_cancel">ยกเลิก</string>
+    <string name="btn_close">ปิด</string>
+    <string name="effect_fallback">สีคงที่</string>
+    <string name="service_channel_name">การควบคุมไฟ</string>
+    <string name="service_notif_text">กำลังควบคุมไฟวงแหวน</string>
 </resources>

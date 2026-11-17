@@ -10,18 +10,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-)
-
+/**
+ * Follows the system: light / dark and Material You dynamic colour (Android 12+; minSdk here is 34).
+ * The static fallback is the standard Material 3 baseline.
+ */
 @Composable
 fun X8rgbTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -33,8 +25,8 @@ fun X8rgbTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> darkColorScheme()
+        else -> lightColorScheme()
     }
 
     MaterialTheme(

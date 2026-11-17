@@ -15,7 +15,7 @@ import com.x8rgb.data.db.entity.NotificationRuleEntity
         LedProfileEntity::class,
         AppSettingsEntity::class,
     ],
-    version  = 4,
+    version  = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

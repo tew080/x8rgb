@@ -14,7 +14,7 @@ class SettingsRepository @Inject constructor(
 ) {
     private val mutex = Mutex()
 
-    /** read-modify-write แบบ serialize ป้องกัน lost update จากหลาย coroutine */
+    /** read-modify-write serialised to prevent lost updates from several coroutines */
     private suspend fun mutate(block: (AppSettingsEntity) -> AppSettingsEntity) {
         mutex.withLock {
             val current = dao.get() ?: AppSettingsEntity()
@@ -32,18 +32,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun updateBrightness(brightness: Int) {
         mutate { it.copy(brightness = brightness) }
-    }
-
-    suspend fun updateQuietHours(enabled: Boolean, start: Int, end: Int) {
-        mutate { it.copy(quietHoursEnabled = enabled, quietHoursStart = start, quietHoursEnd = end) }
-    }
-
-    suspend fun updateMusicSync(enabled: Boolean) {
-        mutate { it.copy(musicSyncEnabled = enabled) }
-    }
-
-    suspend fun updateMotionReactive(enabled: Boolean) {
-        mutate { it.copy(motionReactiveEnabled = enabled) }
     }
 
     suspend fun updateBaseColor(packed: Long) {
