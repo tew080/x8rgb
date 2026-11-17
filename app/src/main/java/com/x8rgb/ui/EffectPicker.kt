@@ -24,7 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.x8rgb.R
 
-/** Localised effect name. Order matches EffectEngine ids (res/values*/arrays.xml). */
+// Localised effect name. Order matches EffectEngine ids; source is the effect_names array in res values and values-en.
 @Composable
 fun effectName(id: Int): String =
     stringArrayResource(R.array.effect_names).getOrElse(id) { stringResource(R.string.effect_fallback) }
