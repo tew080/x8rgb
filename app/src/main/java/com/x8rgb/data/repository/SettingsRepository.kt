@@ -3,6 +3,8 @@ package com.x8rgb.data.repository
 import com.x8rgb.data.db.dao.AppSettingsDao
 import com.x8rgb.data.db.entity.AppSettingsEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,52 +12,45 @@ import javax.inject.Singleton
 class SettingsRepository @Inject constructor(
     private val dao: AppSettingsDao
 ) {
+    private val mutex = Mutex()
+
+    /** read-modify-write แบบ serialize ป้องกัน lost update จากหลาย coroutine */
+    private suspend fun mutate(block: (AppSettingsEntity) -> AppSettingsEntity) {
+        mutex.withLock {
+            val current = dao.get() ?: AppSettingsEntity()
+            dao.upsert(block(current))
+        }
+    }
+
     fun observe(): Flow<AppSettingsEntity?> = dao.observe()
 
     suspend fun get(): AppSettingsEntity = dao.get() ?: AppSettingsEntity()
 
     suspend fun updateMasterEnabled(enabled: Boolean) {
-        val s = get()
-        dao.upsert(s.copy(masterEnabled = enabled))
+        mutate { it.copy(masterEnabled = enabled) }
     }
 
     suspend fun updateBrightness(brightness: Int) {
-        val s = get()
-        dao.upsert(s.copy(brightness = brightness))
+        mutate { it.copy(brightness = brightness) }
     }
 
     suspend fun updateQuietHours(enabled: Boolean, start: Int, end: Int) {
-        val s = get()
-        dao.upsert(s.copy(quietHoursEnabled = enabled, quietHoursStart = start, quietHoursEnd = end))
+        mutate { it.copy(quietHoursEnabled = enabled, quietHoursStart = start, quietHoursEnd = end) }
     }
 
     suspend fun updateMusicSync(enabled: Boolean) {
-        val s = get()
-        dao.upsert(s.copy(musicSyncEnabled = enabled))
+        mutate { it.copy(musicSyncEnabled = enabled) }
     }
 
     suspend fun updateMotionReactive(enabled: Boolean) {
-        val s = get()
-        dao.upsert(s.copy(motionReactiveEnabled = enabled))
+        mutate { it.copy(motionReactiveEnabled = enabled) }
     }
 
     suspend fun updateBaseColor(packed: Long) {
-        val s = get()
-        dao.upsert(s.copy(baseColorPacked = packed))
-    }
-
-    suspend fun updateForceHold(enabled: Boolean) {
-        val s = get()
-        dao.upsert(s.copy(forceHoldEnabled = enabled))
-    }
-
-    suspend fun updateForceHoldColor(packed: Long) {
-        val s = get()
-        dao.upsert(s.copy(forceHoldColorPacked = packed))
+        mutate { it.copy(baseColorPacked = packed) }
     }
 
     suspend fun updateAmbientEffect(id: Int) {
-        val s = get()
-        dao.upsert(s.copy(ambientEffectId = id))
+        mutate { it.copy(ambientEffectId = id) }
     }
 }

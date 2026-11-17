@@ -44,6 +44,12 @@ class DebugTestRunner(
     private var receiver: BroadcastReceiver? = null
     private var observer: ContentObserver? = null
 
+    companion object {
+        fun isEnabled(ctx: Context): Boolean {
+            return (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        }
+    }
+
     fun register() {
         val rx = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
@@ -54,7 +60,7 @@ class DebugTestRunner(
                 runCase(case,
                     intent.getIntExtra("ms", 5000),
                     intent.getStringExtra("pkg"),
-                    intent.getIntExtra("v", RingMode.FACE_DOWN.value))
+                    intent.getIntExtra("v", RingMode.FACE_DOWN.systemValue))
             }
         }
         receiver = rx
@@ -130,22 +136,130 @@ class DebugTestRunner(
                     log("cancelled")
                     delay(1500)
                 }
-                "strip" -> {
-                    val mode = RingMode.fromValue(v)
-                    val ok = RingSwitch.set(ctx, mode)
-                    log("set mode=$mode ok=$ok")
-                    delay(1500)
-                    log("systemMode=${RingSwitch.systemMode(ctx)}")
+                "probe" -> {
+                    // Look at the phone: does any value of the 3rd/4th int light only one ring/segment?
+                    pause(true)
+                    try {
+                        for (a in 0..7) {
+                            log("arg3=$a arg4=0 -> %b".format(MiuiLightsBinder.setColorRaw(0xFF0000, a, 0)))
+                            delay(1500)
+                            MiuiLightsBinder.off()
+                            delay(300)
+                        }
+                        for (b in 1..8) {
+                            log("arg3=3 arg4=$b -> %b".format(MiuiLightsBinder.setColorRaw(0x00FF00, 3, b)))
+                            delay(1500)
+                            MiuiLightsBinder.off()
+                            delay(300)
+                        }
+                    } finally {
+                        MiuiLightsBinder.off()
+                        pause(false)
+                    }
                 }
-                else -> log("unknown case")
+                "txscan" -> {
+                    // Same payload, different transaction codes. Watch the ring.
+                    pause(true)
+                    try {
+                        for (code in 1..10) {
+                            log("tx=$code -> %b".format(MiuiLightsBinder.setColorRaw(0xFF0000, 3, 0, code)))
+                            delay(1500)
+                            MiuiLightsBinder.off()
+                            delay(300)
+                        }
+                    } finally {
+                        MiuiLightsBinder.off()
+                        pause(false)
+                    }
+                }
+                "shapes" -> {
+                    // For tx 1..4 try several argument layouts. A layout with no exception = matches the real signature.
+                    pause(true)
+                    try {
+                        val rgb = 0xFFFFFF
+                        val argb = (0xFF000000L or rgb.toLong()).toInt()
+                        val me = MiuiLightsBinder.callerPackage
+                        val shapes = listOf(
+                            "A  rgb,pkg,3,0"  to listOf<Any>(rgb, me, 3, 0),
+                            "Aa argb,pkg,3,0" to listOf<Any>(argb, me, 3, 0),
+                            "B  rgb,pkg,3"    to listOf<Any>(rgb, me, 3),
+                            "Ba argb,pkg,3"   to listOf<Any>(argb, me, 3),
+                            "C  rgb,pkg"      to listOf<Any>(rgb, me),
+                            "D  rgb"          to listOf<Any>(rgb),
+                            "E  pkg,rgb"      to listOf<Any>(me, rgb),
+                        )
+                        for (code in 1..4) for ((name, args) in shapes) {
+                            log("tx=$code $name -> ${MiuiLightsBinder.rawTransact(code, args)}")
+                            delay(1300)
+                            MiuiLightsBinder.off()
+                            delay(200)
+                        }
+                    } finally {
+                        MiuiLightsBinder.off()
+                        pause(false)
+                    }
+                }
+                "matrix" -> {
+                    // One-shot guided test: for each SYSTEM ring mode, flash R/G/B straight through the binder.
+                    // Watch the ring and note which "PHASE" lines are lit. Original system mode is restored at the end.
+                    pause(true)
+                    val key = "settings_strip_light_enable"
+                    val resolver = ctx.contentResolver
+                    val original = runCatching { android.provider.Settings.Global.getInt(resolver, key) }.getOrNull()
+                    val pm = ctx.getSystemService(android.os.PowerManager::class.java)
+                    try {
+                        for (sys in listOf(1, 2, 0)) {
+                            val wrote = runCatching { android.provider.Settings.Global.putInt(resolver, key, sys) }
+                            log("=== system mode=$sys write=${wrote.getOrNull() ?: wrote.exceptionOrNull()?.javaClass?.simpleName} " +
+                                "readBack=${runCatching { android.provider.Settings.Global.getInt(resolver, key) }.getOrNull()}")
+                            delay(800)
+                            for ((name, c) in listOf("RED" to 0xFF0000, "GREEN" to 0x00FF00, "BLUE" to 0x0000FF)) {
+                                val ok = MiuiLightsBinder.setColor(c)
+                                log("PHASE sys=$sys $name ok=$ok screenOn=${pm.isInteractive}")
+                                delay(2000)
+                                MiuiLightsBinder.off()
+                                delay(400)
+                            }
+                        }
+                    } finally {
+                        MiuiLightsBinder.off()
+                        original?.let { runCatching { android.provider.Settings.Global.putInt(resolver, key, it) } }
+                        log("restored system mode=$original now=${runCatching { android.provider.Settings.Global.getInt(resolver, key) }.getOrNull()}")
+                        pause(false)
+                    }
+                }
+                "rate" -> {
+                    // Does the ring survive rapid calls? Watch which PHASE lines are lit.
+                    pause(true)
+                    try {
+                        val cols = listOf(0xFF0000, 0x00FF00, 0x0000FF)
+                        for (interval in listOf(50L, 100L, 250L, 500L)) {
+                            log("=== PHASE changing colour every ${interval}ms (3s)")
+                            val end = SystemClock.elapsedRealtime() + 3000
+                            var i = 0
+                            while (SystemClock.elapsedRealtime() < end) {
+                                MiuiLightsBinder.setColor(cols[i++ % 3])
+                                delay(interval)
+                            }
+                            MiuiLightsBinder.off(); delay(800)
+                        }
+                        for (interval in listOf(50L, 500L)) {
+                            log("=== PHASE same colour (white) re-sent every ${interval}ms (3s)")
+                            val end = SystemClock.elapsedRealtime() + 3000
+                            while (SystemClock.elapsedRealtime() < end) {
+                                MiuiLightsBinder.setColor(0xFFFFFF)
+                                delay(interval)
+                            }
+                            MiuiLightsBinder.off(); delay(800)
+                        }
+                    } finally {
+                        MiuiLightsBinder.off()
+                        pause(false)
+                    }
+                }
             }
-        } finally {
-            log("done ${SystemLightProbe.snapshot(ctx)}")
+        } catch (e: Exception) {
+            log("ERROR: $e")
         }
-    }
-
-    companion object {
-        fun isEnabled(ctx: Context): Boolean =
-            ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     }
 }

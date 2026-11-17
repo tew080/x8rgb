@@ -78,6 +78,15 @@ import com.x8rgb.ui.MainViewModel
 import com.x8rgb.ui.RING_PALETTE
 import com.x8rgb.ui.theme.X8rgbTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.x8rgb.data.db.entity.AppSettingsEntity
+import kotlinx.coroutines.delay
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -96,7 +105,6 @@ class MainActivity : ComponentActivity() {
 fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var destination by remember { mutableStateOf(AppDestinations.HOME) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -105,60 +113,24 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
     fun setMaster(enabled: Boolean) {
         viewModel.toggleMaster(enabled)
         val intent = Intent(context, RgbForegroundService::class.java)
-        if (enabled) {
-            context.startForegroundService(intent)
-        } else {
-            context.stopService(intent)
-        }
+        if (enabled) context.startForegroundService(intent)
+        else context.stopService(intent)
     }
 
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = { Icon(painterResource(it.icon), contentDescription = stringResource(it.labelRes)) },
-                    label = { Text(stringResource(it.labelRes)) },
-                    selected = it == destination,
-                    onClick = { destination = it }
-                )
-            }
-        }
-    ) {
-        Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
-            val modifier = Modifier.padding(inner)
-            when (destination) {
-                AppDestinations.HOME -> HomeScreen(
-                    state = state,
-                    modifier = modifier,
-                    onMaster = ::setMaster,
-                    onBrightness = viewModel::updateBrightness,
-                    onMode = { viewModel.setRingMode(it) },
-                    onBaseColor = viewModel::setBaseColor,
-                    onForceHold = viewModel::setForceHold,
-                    onForceHoldColor = viewModel::setForceHoldColor,
-                    onAmbientEffect = viewModel::setAmbientEffect,
-                    onRequestShizuku = viewModel::requestShizukuPermission,
-                    onGrantShizuku = viewModel::grantViaShizuku,
-                    onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                    onTestHardware = viewModel::testHardware
-                )
-                AppDestinations.RULES -> RulesScreen(
-                    state = state,
-                    modifier = modifier,
-                    onAdd = viewModel::addAppRule,
-                    onUpdate = viewModel::updateRule,
-                    onDelete = viewModel::deleteRule,
-                    onPreview = viewModel::previewRule
-                )
-                AppDestinations.SETTINGS -> SettingsScreen(
-                    state = state,
-                    modifier = modifier,
-                    onQuiet = viewModel::updateQuietHours,
-                    onMusicSync = viewModel::toggleMusicSync,
-                    onMotionReactive = viewModel::toggleMotionReactive
-                )
-            }
-        }
+    Scaffold(modifier = Modifier.fillMaxSize()) { inner ->
+        HomeScreen(
+            state = state,
+            modifier = Modifier.padding(inner),
+            onMaster = ::setMaster,
+            onBrightness = viewModel::updateBrightness,
+            onMode = { viewModel.setRingMode(it) },
+            onBaseColor = viewModel::setBaseColor,
+            onAmbientEffect = viewModel::setAmbientEffect,
+            onRequestShizuku = viewModel::requestShizukuPermission,
+            onGrantShizuku = viewModel::grantViaShizuku,
+            onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+            onTestHardware = viewModel::testHardware
+        )
     }
 }
 
@@ -170,8 +142,6 @@ private fun HomeScreen(
     onBrightness: (Int) -> Unit,
     onMode: (RingMode) -> Unit,
     onBaseColor: (RgbColor) -> Unit,
-    onForceHold: (Boolean) -> Unit,
-    onForceHoldColor: (RgbColor) -> Unit,
     onAmbientEffect: (Int) -> Unit,
     onRequestShizuku: () -> Unit,
     onGrantShizuku: () -> Unit,
@@ -199,6 +169,8 @@ private fun HomeScreen(
             onTest = onTestHardware
         )
 
+        RingPreviewCard(settings = state.settings, ringMode = state.ringMode)
+
         RingModeCard(
             selected = state.ringMode,
             system = state.systemMode,
@@ -207,11 +179,7 @@ private fun HomeScreen(
 
         BaseAndHoldCard(
             baseColor = RgbColor(state.settings.baseColorPacked),
-            forceHold = state.settings.forceHoldEnabled,
-            forceColor = RgbColor(state.settings.forceHoldColorPacked),
             onBaseColor = onBaseColor,
-            onForceHold = onForceHold,
-            onForceHoldColor = onForceHoldColor,
         )
 
         AmbientEffectCard(
@@ -370,90 +338,48 @@ private fun RingModeCard(
     }
 }
 
-@Composable
-private fun BaseAndHoldCard(
-    baseColor: RgbColor,
-    forceHold: Boolean,
-    forceColor: RgbColor,
-    onBaseColor: (RgbColor) -> Unit,
-    onForceHold: (Boolean) -> Unit,
-    onForceHoldColor: (RgbColor) -> Unit,
-) {
-    var editBase by remember { mutableStateOf(false) }
-    var editForce by remember { mutableStateOf(false) }
+    @Composable
+    private fun BaseAndHoldCard(
+        baseColor: RgbColor,
+        onBaseColor: (RgbColor) -> Unit,
+    ) {
+        var editBase by remember { mutableStateOf(false) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.card_base_hold_title), style = MaterialTheme.typography.titleMedium)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.card_base_hold_title), style = MaterialTheme.typography.titleMedium)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.label_base_color), style = MaterialTheme.typography.bodyMedium)
-                    Text(stringResource(R.string.hint_base_color), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                }
-                ColorDot(
-                    color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(40, 40, 40),
-                    selected = false,
-                    size = 40.dp,
-                    onClick = { editBase = true },
-                )
-            }
-            TextButton(onClick = { onBaseColor(RgbColor.OFF) }) {
-                Text(stringResource(R.string.btn_clear_base))
-            }
-
-            HorizontalDivider()
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.label_force_hold), style = MaterialTheme.typography.bodyMedium)
-                    Text(stringResource(R.string.hint_force_hold), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                }
-                Switch(checked = forceHold, onCheckedChange = onForceHold)
-            }
-            if (forceHold) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(stringResource(R.string.label_force_color), style = MaterialTheme.typography.bodyMedium)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.label_base_color), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.hint_base_color), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
                     ColorDot(
-                        color = forceColor,
-                        selected = true,
+                        color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(40, 40, 40),
+                        selected = false,
                         size = 40.dp,
-                        onClick = { editForce = true },
+                        onClick = { editBase = true },
                     )
+                }
+                TextButton(onClick = { onBaseColor(RgbColor.OFF) }) {
+                    Text(stringResource(R.string.btn_clear_base))
                 }
             }
         }
-    }
 
-    if (editBase) {
-        HsvPickerDialog(
-            title = stringResource(R.string.dialog_base_color),
-            initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
-            onPick = { onBaseColor(it); editBase = false },
-            onDismiss = { editBase = false },
-        )
+        if (editBase) {
+            HsvPickerDialog(
+                title = stringResource(R.string.dialog_base_color),
+                initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
+                onPick = { onBaseColor(it); editBase = false },
+                onDismiss = { editBase = false },
+            )
+        }
     }
-    if (editForce) {
-        HsvPickerDialog(
-            title = stringResource(R.string.dialog_force_color),
-            initial = forceColor,
-            onPick = { onForceHoldColor(it); editForce = false },
-            onDismiss = { editForce = false },
-        )
-    }
-}
 
 @Composable
 private fun HsvPickerDialog(
@@ -528,7 +454,7 @@ private fun AmbientEffectCard(
             title = { Text(stringResource(R.string.dialog_select_effect)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(EffectEngine.EFFECT_NAMES.size) { id ->
+                    items(EffectEngine.SELECTABLE_IDS) { id ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -675,7 +601,7 @@ private fun EditRuleDialog(
 
                 Text(stringResource(R.string.dialog_select_effect), style = MaterialTheme.typography.titleSmall)
                 LazyColumn(modifier = Modifier.height(200.dp)) {
-                    items(EffectEngine.EFFECT_NAMES.size) { id ->
+                    items(EffectEngine.SELECTABLE_IDS) { id ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -848,6 +774,64 @@ private fun modeLabel(mode: RingMode): String = when (mode) {
     RingMode.OFF -> stringResource(R.string.mode_off)
     RingMode.ALWAYS -> stringResource(R.string.mode_always)
     RingMode.FACE_DOWN -> stringResource(R.string.mode_face_down)
+}
+
+@Composable
+private fun RingPreviewCard(settings: AppSettingsEntity, ringMode: RingMode) {
+    val engine = remember { EffectEngine() }
+    var tick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(50L)   // ตรงกับ TICK_INTERVAL ของ service
+            tick++
+        }
+    }
+    val c = previewFrame(settings, ringMode, tick, engine)
+    val ringColor = Color(c.r, c.g, c.b)
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.card_preview_title), style = MaterialTheme.typography.titleMedium)
+            Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                val cy = size.height / 2f
+                val lensR = 22.dp.toPx()
+                val ringR = lensR + 10.dp.toPx()
+                val glowW = 14.dp.toPx()
+                val coreW = 5.dp.toPx()
+                // ค่าตั้งต้นตำแหน่งกล้อง: สองเลนส์เรียงซ้ายขวา
+                for (cx in listOf(size.width * 0.35f, size.width * 0.65f)) {
+                    drawCircle(Color(0xFF0B0B0B), radius = lensR, center = Offset(cx, cy))
+                    val topLeft = Offset(cx - ringR, cy - ringR)
+                    val arcSize = Size(ringR * 2, ringR * 2)
+                    for (seg in 0 until 4) {
+                        val start = seg * 90f + 6f   // 4 segment, เว้นช่องละ 12 องศา
+                        drawArc(ringColor.copy(alpha = 0.25f), start, 78f, false, topLeft, arcSize,
+                            style = Stroke(width = glowW, cap = StrokeCap.Round))
+                        drawArc(ringColor, start, 78f, false, topLeft, arcSize,
+                            style = Stroke(width = coreW, cap = StrokeCap.Round))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** ทำซ้ำลำดับการตัดสินใจของ RgbForegroundService: master → forceHold → ambient effect → brightness */
+private fun previewFrame(s: AppSettingsEntity, mode: RingMode, t: Long, engine: EffectEngine): RgbColor {
+    if (!s.masterEnabled || mode == RingMode.OFF) return RgbColor.OFF
+    val frame = if (s.forceHoldEnabled) {
+        RgbColor(s.forceHoldColorPacked)
+    } else {
+        val base = RgbColor(s.baseColorPacked)
+        val seed = if (base != RgbColor.OFF) base else RgbColor(255, 255, 255)
+        when {
+            s.ambientEffectId == EffectEngine.EFFECT_STATIC && base == RgbColor.OFF -> RgbColor.OFF
+            s.ambientEffectId == EffectEngine.EFFECT_STATIC -> seed
+            else -> engine.compute(s.ambientEffectId, t, seed)
+        }
+    }
+    val k = s.brightness / 255f
+    return RgbColor((frame.r * k).toInt(), (frame.g * k).toInt(), (frame.b * k).toInt())
 }
 
 enum class AppDestinations(val labelRes: Int, val icon: Int) {

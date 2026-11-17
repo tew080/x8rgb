@@ -26,6 +26,7 @@ object SystemLightGuard {
 
     fun suppressChargingLed(ctx: Context): Boolean {
         return try {
+            if (Settings.Global.getInt(ctx.contentResolver, CHARGING_LED, 1) == 0) return true
             val ok = Settings.Global.putInt(ctx.contentResolver, CHARGING_LED, 0)
             DiagLog.log("sys", "suppress charging_led ok=$ok")
             ok

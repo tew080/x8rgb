@@ -5,15 +5,21 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 
-enum class RingMode(val value: Int) {
-    OFF(0),
-    ALWAYS(1),
-    FACE_DOWN(2);
+enum class RingMode(val id: String, val systemValue: Int) {
+    OFF("off", 0),
+    ALWAYS("always", 2),
+    FACE_DOWN("face_down", FACE_DOWN_SYSTEM_VALUE);
 
     companion object {
-        fun fromValue(v: Int?): RingMode = entries.firstOrNull { it.value == v } ?: ALWAYS
+        fun fromId(id: String?): RingMode =
+            entries.firstOrNull { it.id == id } ?: ALWAYS
+
+        fun fromSystemValue(v: Int?): RingMode? =
+            entries.firstOrNull { it.systemValue == v }
     }
 }
+
+private const val FACE_DOWN_SYSTEM_VALUE = 1  // ตัวอย่างเท่านั้น ต้องยืนยันก่อนใช้
 
 object RingSwitch {
     private const val TAG = "RingSwitch"
@@ -25,27 +31,25 @@ object RingSwitch {
     fun hasPermission(ctx: Context): Boolean =
         ctx.checkSelfPermission(PERM) == PackageManager.PERMISSION_GRANTED
 
+    private const val PREF_MODE_ID = "ring_mode_id"   // ใช้ key ใหม่ เพราะ key เดิมเก็บเป็น Int
+
     fun savedMode(ctx: Context): RingMode =
-        RingMode.fromValue(prefs(ctx).getInt(PREF_MODE, RingMode.ALWAYS.value))
+        RingMode.fromId(prefs(ctx).getString(PREF_MODE_ID, null))
 
     fun systemMode(ctx: Context): RingMode? =
-        runCatching { RingMode.fromValue(Settings.Global.getInt(ctx.contentResolver, SWITCH_KEY)) }.getOrNull()
+        runCatching {
+            RingMode.fromSystemValue(Settings.Global.getInt(ctx.contentResolver, SWITCH_KEY))
+        }.getOrNull()
 
-    /**
-     * Sets the ring mode. Note: Changing system settings requires WRITE_SECURE_SETTINGS.
-     */
     fun set(ctx: Context, mode: RingMode): Boolean {
-        Log.d(TAG, "Setting ring mode to: $mode (${mode.value})")
         val ok = try {
-            // HyperOS key: 0=Off, 1=Always, 2=Face-down
-            Settings.Global.putInt(ctx.contentResolver, SWITCH_KEY, mode.value)
+            Settings.Global.putInt(ctx.contentResolver, SWITCH_KEY, mode.systemValue) &&
+                Settings.Global.getInt(ctx.contentResolver, SWITCH_KEY, -1) == mode.systemValue
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set system setting $SWITCH_KEY", e)
             false
         }
-        
-        // Always save to local prefs so the app remembers the user's choice even if system write fails
-        prefs(ctx).edit().putInt(PREF_MODE, mode.value).apply()
+        prefs(ctx).edit().putString(PREF_MODE_ID, mode.id).apply()
         return ok
     }
 

@@ -62,10 +62,15 @@ class RgbNotificationListener : NotificationListenerService() {
         val pkg = sbn.packageName ?: return
         val notif = sbn.notification ?: return
         if (notif.channelId == SERVICE_CHANNEL) return
-        if (!masterEnabled) return
+        if (!masterEnabled) {
+            DiagLog.log("notif", "posted pkg=$pkg ignored: master disabled")
+            return
+        }
 
         val key = contactKey(notif)
-        val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules) ?: return
+        val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
+        DiagLog.log("notif", "posted pkg=$pkg ch=${notif.channelId} rules=${cachedRules.size} -> ${rule?.displayName ?: "NO MATCH"}")
+        if (rule == null) return
 
         activeStack[sbn.key] = rule
         updateRing()

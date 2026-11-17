@@ -76,7 +76,7 @@ class MainViewModel @Inject constructor(
     private val ticker: Flow<Unit> = flow {
         while (true) {
             emit(Unit)
-            delay(2000)
+            delay(500)   // เดิม 2000: ทำให้สถานะที่สลับจากระบบแสดงช้า
         }
     }
 
@@ -138,40 +138,26 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun setRingMode(mode: RingMode): Boolean {
-        return RingSwitch.set(context, mode)
-    }
+    fun setRingMode(mode: RingMode): Boolean = RingSwitch.set(context, mode)
 
     fun updateQuietHours(enabled: Boolean, start: Int, end: Int) {
         viewModelScope.launch { settingsRepository.updateQuietHours(enabled, start, end) }
     }
 
+    /** ไม่ปิดไฟเพลงของระบบแล้ว: ให้ระบบใช้งานได้ตามปกติ แอปจะ yield เอง */
     fun toggleMusicSync(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.updateMusicSync(enabled)
-            if (enabled) {
-                musicLightManager.disableAllSystemMusicLights()
-            }
             musicLightManager.setPackageEnabled(context.packageName, enabled)
         }
     }
 
     fun toggleMotionReactive(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateMotionReactive(enabled)
-        }
+        viewModelScope.launch { settingsRepository.updateMotionReactive(enabled) }
     }
 
     fun setBaseColor(color: RgbColor) {
         viewModelScope.launch { settingsRepository.updateBaseColor(color.packed) }
-    }
-
-    fun setForceHold(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.updateForceHold(enabled) }
-    }
-
-    fun setForceHoldColor(color: RgbColor) {
-        viewModelScope.launch { settingsRepository.updateForceHoldColor(color.packed) }
     }
 
     fun setAmbientEffect(effectId: Int) {

@@ -65,6 +65,11 @@ class RgbForegroundService : Service() {
     private var musicSyncJob: Job? = null
 
     private var ownsRing = false
+    private var loopN = 0L
+    private var lastRgb = -1
+    private var lastSentAt = 0L
+    @Volatile private var paused = false          // set by DebugTestRunner while a test drives the ring
+    private var debugRunner: DebugTestRunner? = null
     private var tick = 0L
     private var lightObserver: ContentObserver? = null
 
@@ -78,7 +83,11 @@ class RgbForegroundService : Service() {
         observeSettings()
         startEffectLoop()
         installLightObserver()
-        
+
+        if (DebugTestRunner.isEnabled(this)) {
+            debugRunner = DebugTestRunner(this, ruleRepository) { paused = it }.also { it.register() }
+        }
+
         DiagLog.log("svc", "RGB service started")
     }
 
@@ -101,6 +110,7 @@ class RgbForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        debugRunner?.unregister()
         releaseRing()
         motionManager.stop()
         stopMusicSync()
@@ -136,6 +146,7 @@ class RgbForegroundService : Service() {
     private fun startEffectLoop() {
         scope.launch {
             while (isActive) {
+                if (paused) { delay(TICK_INTERVAL); continue }
                 val mode = RingSwitch.savedMode(this@RgbForegroundService)
                 
                 // Logic for "Face-down" (เปิดเมื่อคว่ำจอ)
@@ -149,6 +160,13 @@ class RgbForegroundService : Service() {
                 }
 
                 val master = settings.masterEnabled && shouldLightUp && !isQuietHours()
+
+                if (loopN++ % 40L == 0L) {   // every ~2 s
+                    DiagLog.log("loop", "master=${settings.masterEnabled} mode=$mode lightUp=$shouldLightUp " +
+                        "quiet=${isQuietHours()} force=${settings.forceHoldEnabled} base=${settings.baseColorPacked} " +
+                        "ambient=${settings.ambientEffectId} target=${targetColor.packed}/$targetAnimationId " +
+                        "bright=${settings.brightness} music=${musicColor.packed}")
+                }
                 
                 if (master) {
                     if (tick % 40L == 0L) suppressSystemCompetitors()
@@ -250,12 +268,18 @@ class RgbForegroundService : Service() {
     private fun applyColor(color: RgbColor) {
         val k = settings.brightness / 255f
         val rgb = ((color.r * k).toInt() shl 16) or ((color.g * k).toInt() shl 8) or (color.b * k).toInt()
-        if (MiuiLightsBinder.setColor(rgb)) ownsRing = true
+        // Don't hammer the lights service with identical values; re-send at most once a second as a keep-alive.
+        val now = SystemClock.elapsedRealtime()
+        if (rgb == lastRgb && now - lastSentAt < 1000L) return
+        val ok = MiuiLightsBinder.setColor(rgb)
+        if (ok) { ownsRing = true; lastRgb = rgb; lastSentAt = now }
+        if (loopN % 40L == 1L) DiagLog.log("apply", "rgb=%06X ok=$ok owns=$ownsRing".format(rgb))
     }
 
     private fun releaseRing() {
         if (!ownsRing) return
         ownsRing = false
+        lastRgb = -1
         tick = 0L
         MiuiLightsBinder.off()
     }
