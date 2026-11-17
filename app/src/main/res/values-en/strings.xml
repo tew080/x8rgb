@@ -30,7 +30,7 @@
     <string name="status_running">On</string>
     <string name="status_stopped">Off</string>
     <string name="label_brightness">Brightness: %d</string>
-    <string name="btn_test_ring">Test ring light</string>
+    <string name="btn_test_ring">Reload ring light</string>
     <string name="card_preview_title">Color preview (simulated)</string>
     <string name="card_ring_mode_title">Ring light mode</string>
     <string name="label_system_state">System setting: %s</string>

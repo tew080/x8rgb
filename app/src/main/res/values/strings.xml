@@ -30,7 +30,7 @@
     <string name="status_running">กำลังทำงาน</string>
     <string name="status_stopped">หยุดทำงาน</string>
     <string name="label_brightness">ความสว่าง %d</string>
-    <string name="btn_test_ring">ทดสอบไฟวงแหวน</string>
+    <string name="btn_test_ring">รีโหลดไฟวงแหวน</string>
     <string name="card_preview_title">ตัวอย่างสี (จำลอง)</string>
     <string name="card_ring_mode_title">โหมดการเปิดไฟ</string>
     <string name="label_system_state">ค่าที่ระบบตั้งไว้: %s</string>
