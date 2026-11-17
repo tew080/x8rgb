@@ -153,7 +153,6 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
                     onMaster = ::setMaster,
                     onBrightness = viewModel::updateBrightness,
                     onMode = { viewModel.setRingMode(it) },
-                    onBaseColor = viewModel::setBaseColor,
                     onAmbientEffect = viewModel::setAmbientEffect,
                     onForceHold = viewModel::setForceHold,
                     onForceHoldColor = viewModel::setForceHoldColor,
@@ -186,7 +185,6 @@ private fun HomeScreen(
     onMaster: (Boolean) -> Unit,
     onBrightness: (Int) -> Unit,
     onMode: (RingMode) -> Unit,
-    onBaseColor: (RgbColor) -> Unit,
     onAmbientEffect: (Int) -> Unit,
     onForceHold: (Boolean) -> Unit,
     onForceHoldColor: (RgbColor) -> Unit,
@@ -224,9 +222,7 @@ private fun HomeScreen(
 
         AmbientEffectCard(
             effectId = state.settings.ambientEffectId,
-            baseColor = RgbColor(state.settings.baseColorPacked),
             onEffect = onAmbientEffect,
-            onBaseColor = onBaseColor,
         )
 
         LockCard(
@@ -382,12 +378,9 @@ private fun RingModeCard(
 @Composable
 private fun AmbientEffectCard(
     effectId: Int,
-    baseColor: RgbColor,
     onEffect: (Int) -> Unit,
-    onBaseColor: (RgbColor) -> Unit,
 ) {
     var pickEffect by remember { mutableStateOf(false) }
-    var pickColor by remember { mutableStateOf(false) }
 
     SectionCard {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -405,19 +398,6 @@ private fun AmbientEffectCard(
                 Text(stringResource(R.string.label_ambient_effect, effectName(effectId)), style = MaterialTheme.typography.bodyLarge)
                 TextButton(onClick = { pickEffect = true }) { Text(stringResource(R.string.btn_pick_effect)) }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.label_ambient_color), style = MaterialTheme.typography.bodyMedium)
-                ColorDot(
-                    color = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
-                    selected = true,
-                    size = 36.dp,
-                    onClick = { pickColor = true },
-                )
-            }
         }
     }
 
@@ -428,14 +408,6 @@ private fun AmbientEffectCard(
             selectedId = effectId,
             onPick = { onEffect(it); pickEffect = false },
             onDismiss = { pickEffect = false },
-        )
-    }
-    if (pickColor) {
-        HsvPickerDialog(
-            title = stringResource(R.string.dialog_base_color),
-            initial = if ((baseColor.r or baseColor.g or baseColor.b) != 0) baseColor else RgbColor(255, 255, 255),
-            onPick = { onBaseColor(it); pickColor = false },
-            onDismiss = { pickColor = false },
         )
     }
 }
@@ -696,13 +668,10 @@ private fun previewFrame(s: AppSettingsEntity, mode: RingMode, t: Long, engine: 
         val lock = RgbColor(s.forceHoldColorPacked)
         if (s.forceHoldEffectId == EffectEngine.EFFECT_STATIC) lock else engine.compute(s.forceHoldEffectId, t, lock)
     } else {
-        val base = RgbColor(s.baseColorPacked)
-        val seed = if (base != RgbColor.OFF) base else RgbColor(255, 255, 255)
-        when {
-            s.ambientEffectId == EffectEngine.EFFECT_STATIC && base == RgbColor.OFF -> RgbColor.OFF
-            s.ambientEffectId == EffectEngine.EFFECT_STATIC -> seed
-            else -> engine.compute(s.ambientEffectId, t, seed)
-        }
+        // Ambient: engine picks colours; STATIC = off when idle.
+        val effectId = engine.sanitize(s.ambientEffectId)
+        if (effectId == EffectEngine.EFFECT_STATIC) RgbColor.OFF
+        else engine.compute(effectId, t, RgbColor(255, 255, 255))
     }
     val k = s.brightness / 255f
     return RgbColor((frame.r * k).toInt(), (frame.g * k).toInt(), (frame.b * k).toInt())
