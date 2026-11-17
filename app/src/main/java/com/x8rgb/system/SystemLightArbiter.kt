@@ -8,6 +8,8 @@ import javax.inject.Singleton
 /**
  * Tracks other light sources (e.g. a system notification light) that are using the ring.
  * While any hold is active, the foreground service must not send colours to the ring.
+ * Holds are released by the source (notification removed) or by the listener's reconcile check;
+ * [MAX_HOLD_MS] is only a last-resort ceiling.
  */
 @Singleton
 class SystemLightArbiter @Inject constructor() {
@@ -15,15 +17,20 @@ class SystemLightArbiter @Inject constructor() {
     /** reason key -> expiry time (SystemClock.elapsedRealtime) */
     private val holds = ConcurrentHashMap<String, Long>()
 
-    /** Start or refresh a hold. Expires after [maxMs] even if never released (safety net). */
+    /** Start or refresh a hold. Re-holding a key during its grace period cancels the resume. */
     fun hold(key: String, maxMs: Long = MAX_HOLD_MS) {
         holds[key] = SystemClock.elapsedRealtime() + maxMs
     }
 
-    /** Source finished. Keep yielding for a short grace period so the ring does not flicker. */
+    /** Source finished. Resume after a short grace so a light that re-appears at once does not flicker. */
     fun release(key: String) {
         val resumeAt = SystemClock.elapsedRealtime() + RESUME_GRACE_MS
         holds.computeIfPresent(key) { _, _ -> resumeAt }
+    }
+
+    /** Drop every hold immediately (e.g. the notification listener disconnected). */
+    fun clear() {
+        holds.clear()
     }
 
     /** Reasons currently holding the ring (expired holds are dropped). */
@@ -34,7 +41,7 @@ class SystemLightArbiter @Inject constructor() {
     }
 
     companion object {
-        const val MAX_HOLD_MS = 15_000L
-        const val RESUME_GRACE_MS = 400L
+        const val MAX_HOLD_MS = 10 * 60_000L
+        const val RESUME_GRACE_MS = 150L
     }
 }

@@ -41,6 +41,7 @@ import javax.inject.Inject
 private const val CHANNEL_ID    = "x8rgb_service"
 private const val NOTIF_ID      = 1
 private const val TICK_INTERVAL = 50L     // 20 fps
+private const val YIELD_POLL_MS = 10L     // check fast while another source holds the ring
 
 @AndroidEntryPoint
 class RgbForegroundService : Service() {
@@ -63,6 +64,7 @@ class RgbForegroundService : Service() {
     private var lastRgb = -1
     private var lastSentAt = 0L
     private var yielding = false
+    private var yieldStartedAt = 0L
     @Volatile private var paused = false          // set by DebugTestRunner while a test drives the ring
     private var debugRunner: DebugTestRunner? = null
     private var tick = 0L
@@ -146,16 +148,18 @@ class RgbForegroundService : Service() {
                 if (busy.isNotEmpty()) {
                     if (!yielding) {
                         yielding = true
+                        yieldStartedAt = SystemClock.elapsedRealtime()
                         lastRgb = -1
                         DiagLog.log("yield", "pause ring, held by $busy")
                     }
-                    delay(TICK_INTERVAL)
+                    delay(YIELD_POLL_MS)
                     continue
                 }
                 if (yielding) {
                     yielding = false
-                    lastRgb = -1           // force a re-send of our colour
-                    DiagLog.log("yield", "resume ring")
+                    lastRgb = -1                       // re-send our colour on this same tick
+                    suppressSystemCompetitors()        // the system may have changed its lights meanwhile
+                    DiagLog.log("yield", "resume ring after ${SystemClock.elapsedRealtime() - yieldStartedAt} ms")
                 }
 
                 val mode = RingSwitch.savedMode(this@RgbForegroundService)

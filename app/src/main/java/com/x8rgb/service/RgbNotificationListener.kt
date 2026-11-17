@@ -20,10 +20,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val SERVICE_CHANNEL = "x8rgb_service"
+private const val RECONCILE_MS = 1000L
 
 @AndroidEntryPoint
 class RgbNotificationListener : NotificationListenerService() {
@@ -36,10 +39,14 @@ class RgbNotificationListener : NotificationListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val activeStack = LinkedHashMap<String, NotificationRule>()
 
+    /** Keys of notifications that currently hold the ring for the system light. */
+    private val systemLit = HashSet<String>()
+
     @Volatile private var cachedRules: List<NotificationRule> = emptyList()
     @Volatile private var masterEnabled: Boolean = true
     private var rulesJob: Job? = null
     private var settingsJob: Job? = null
+    private var reconcileJob: Job? = null
 
     override fun onListenerConnected() {
         DiagLog.log("notif", "listener connected")
@@ -51,12 +58,21 @@ class RgbNotificationListener : NotificationListenerService() {
         settingsJob = scope.launch {
             settingsRepository.observe().collect { masterEnabled = it?.masterEnabled ?: true }
         }
+        reconcileJob?.cancel()
+        reconcileJob = scope.launch {
+            while (isActive) {
+                delay(RECONCILE_MS)
+                reconcileSystemLit()
+            }
+        }
     }
 
     override fun onListenerDisconnected() {
         DiagLog.log("notif", "listener disconnected")
         rulesJob?.cancel()
         settingsJob?.cancel()
+        reconcileJob?.cancel()
+        releaseAllSystemLit("listener disconnected")
         requestRebind(ComponentName(this, RgbNotificationListener::class.java))
     }
 
@@ -66,13 +82,15 @@ class RgbNotificationListener : NotificationListenerService() {
         if (notif.channelId == SERVICE_CHANNEL) return
         if (pkg == packageName) return
 
-        // A notification that asks for a light, and that no rule of ours claims, is painted by the system.
-        // Yield the ring to it until the notification is removed.
         val key = contactKey(notif)
         val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
+
+        // A notification that asks for a light and that none of our rules claims is painted by the system:
+        // yield the ring to it. Anything else must not keep a stale hold.
         if (rule == null && (notif.flags and Notification.FLAG_SHOW_LIGHTS) != 0) {
-            arbiter.hold(sysKey(sbn))
-            DiagLog.log("yield", "system light from pkg=$pkg key=${sbn.key}")
+            holdSystemLit(sbn.key, pkg)
+        } else {
+            releaseSystemLit(sbn.key, "rule matched or no light")
         }
 
         if (!masterEnabled) {
@@ -88,13 +106,49 @@ class RgbNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        arbiter.release(sysKey(sbn))
+        releaseSystemLit(sbn.key, "removed")
         if (activeStack.remove(sbn.key) != null) {
             updateRing()
         }
     }
 
-    private fun sysKey(sbn: StatusBarNotification) = "notif:${sbn.key}"
+    private fun holdSystemLit(key: String, pkg: String) {
+        systemLit += key
+        arbiter.hold(sysKey(key))
+        DiagLog.log("yield", "system light from pkg=$pkg key=$key")
+    }
+
+    private fun releaseSystemLit(key: String, why: String) {
+        if (systemLit.remove(key)) {
+            arbiter.release(sysKey(key))
+            DiagLog.log("yield", "release key=$key ($why)")
+        }
+    }
+
+    private fun releaseAllSystemLit(why: String) {
+        if (systemLit.isEmpty()) return
+        systemLit.clear()
+        arbiter.clear()
+        DiagLog.log("yield", "release all ($why)")
+    }
+
+    /**
+     * Safety net: if a notification that holds the ring is no longer in the shade,
+     * release it even when the removal callback was missed.
+     */
+    private fun reconcileSystemLit() {
+        if (systemLit.isEmpty()) return
+        val present: Set<String> = try {
+            activeNotifications?.map { it.key }?.toSet() ?: return
+        } catch (e: Exception) {
+            return
+        }
+        for (key in systemLit.filter { it !in present }.toList()) {
+            releaseSystemLit(key, "not in shade any more")
+        }
+    }
+
+    private fun sysKey(key: String) = "notif:$key"
 
     private fun updateRing() {
         val bestRule = activeStack.values.sortedBy { it.type.ordinal }.firstOrNull()
@@ -106,6 +160,7 @@ class RgbNotificationListener : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        releaseAllSystemLit("listener destroyed")
         scope.cancel()
         super.onDestroy()
     }
