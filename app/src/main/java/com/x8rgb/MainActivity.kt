@@ -594,6 +594,44 @@ private fun PermissionRow(label: String, granted: Boolean) {
     }
 }
 
+/** Developer credit, source link, GPL-3.0 - Settings footer only. */
+@Composable
+private fun AboutFooter() {
+    val context = LocalContext.current
+    fun open(url: String) {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.about_dev),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        TextButton(onClick = { open("https://github.com/tew080") }) {
+            Text(stringResource(R.string.about_dev_link))
+        }
+        TextButton(onClick = { open("https://github.com/tew080/x8rgb") }) {
+            Text(stringResource(R.string.about_source))
+        }
+        Text(
+            text = stringResource(R.string.about_license),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        TextButton(onClick = { open("https://www.gnu.org/licenses/gpl-3.0.html") }) {
+            Text(stringResource(R.string.about_license_link))
+        }
+    }
+}
+
 @Composable
 private fun ColorDot(
     color: RgbColor,
