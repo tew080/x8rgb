@@ -1,10 +1,10 @@
-# Always-On Ring (x8rgb)
+# Always-On Ring
 
 [ภาษาไทย](README.th.md)
 
 Control the HyperOS camera-ring LED from a normal (non-root) app: ambient effects, color lock, and notification-aware yield to system lights.
 
-**Requires a HyperOS device with an RGB ring** (e.g. Xiaomi 14 Ultra / similar). Not a generic AOSP LED app.
+**Requires a HyperOS device with an RGB ring** (e.g. POCO x8 PRO / similar). Not a generic AOSP LED app.
 
 ## Screenshots
 
