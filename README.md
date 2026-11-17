@@ -1,4 +1,4 @@
-# Always-On Ring (x8rgb)
+# Always-On Ring
 
 [ภาษาไทย](README.th.md)
 
