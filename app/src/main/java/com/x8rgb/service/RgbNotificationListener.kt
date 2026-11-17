@@ -12,6 +12,7 @@ import com.x8rgb.domain.engine.EffectEngine
 import com.x8rgb.domain.engine.PriorityResolver
 import com.x8rgb.domain.model.NotificationRule
 import com.x8rgb.domain.model.RgbColor
+import com.x8rgb.system.SystemLightArbiter
 import com.x8rgb.util.DiagLog
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,7 @@ class RgbNotificationListener : NotificationListenerService() {
     @Inject lateinit var ruleRepository: RuleRepository
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var priorityResolver: PriorityResolver
+    @Inject lateinit var arbiter: SystemLightArbiter
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val activeStack = LinkedHashMap<String, NotificationRule>()
@@ -62,13 +64,22 @@ class RgbNotificationListener : NotificationListenerService() {
         val pkg = sbn.packageName ?: return
         val notif = sbn.notification ?: return
         if (notif.channelId == SERVICE_CHANNEL) return
+        if (pkg == packageName) return
+
+        // A notification that asks for a light, and that no rule of ours claims, is painted by the system.
+        // Yield the ring to it until the notification is removed.
+        val key = contactKey(notif)
+        val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
+        if (rule == null && (notif.flags and Notification.FLAG_SHOW_LIGHTS) != 0) {
+            arbiter.hold(sysKey(sbn))
+            DiagLog.log("yield", "system light from pkg=$pkg key=${sbn.key}")
+        }
+
         if (!masterEnabled) {
             DiagLog.log("notif", "posted pkg=$pkg ignored: master disabled")
             return
         }
 
-        val key = contactKey(notif)
-        val rule = priorityResolver.resolve(pkg, key, notif.group, cachedRules)
         DiagLog.log("notif", "posted pkg=$pkg ch=${notif.channelId} rules=${cachedRules.size} -> ${rule?.displayName ?: "NO MATCH"}")
         if (rule == null) return
 
@@ -77,10 +88,13 @@ class RgbNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        arbiter.release(sysKey(sbn))
         if (activeStack.remove(sbn.key) != null) {
             updateRing()
         }
     }
+
+    private fun sysKey(sbn: StatusBarNotification) = "notif:${sbn.key}"
 
     private fun updateRing() {
         val bestRule = activeStack.values.sortedBy { it.type.ordinal }.firstOrNull()

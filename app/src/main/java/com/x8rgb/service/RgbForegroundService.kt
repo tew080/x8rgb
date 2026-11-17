@@ -30,6 +30,7 @@ import com.x8rgb.system.MiuiLightsBinder
 import com.x8rgb.system.MotionManager
 import com.x8rgb.system.RingMode
 import com.x8rgb.system.RingSwitch
+import com.x8rgb.system.SystemLightArbiter
 import com.x8rgb.system.SystemLightGuard
 import com.x8rgb.system.MusicLightManager
 import com.x8rgb.util.DiagLog
@@ -54,6 +55,7 @@ class RgbForegroundService : Service() {
     @Inject lateinit var motionManager: MotionManager
     @Inject lateinit var fftProcessor: FftProcessor
     @Inject lateinit var musicLightManager: MusicLightManager
+    @Inject lateinit var arbiter: SystemLightArbiter
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -72,6 +74,7 @@ class RgbForegroundService : Service() {
     private var debugRunner: DebugTestRunner? = null
     private var tick = 0L
     private var lightObserver: ContentObserver? = null
+    private var yielding = false
 
     override fun onCreate() {
         super.onCreate()
@@ -147,6 +150,23 @@ class RgbForegroundService : Service() {
         scope.launch {
             while (isActive) {
                 if (paused) { delay(TICK_INTERVAL); continue }
+
+                // Another source (system notification light, etc.) owns the ring: send nothing.
+                val busy = arbiter.activeReasons()
+                if (busy.isNotEmpty()) {
+                    if (!yielding) {
+                        yielding = true
+                        lastRgb = -1
+                        DiagLog.log("yield", "pause ring, held by $busy")
+                    }
+                    delay(TICK_INTERVAL)
+                    continue
+                }
+                if (yielding) {
+                    yielding = false
+                    lastRgb = -1           // force a re-send of our colour
+                    DiagLog.log("yield", "resume ring")
+                }
                 val mode = RingSwitch.savedMode(this@RgbForegroundService)
                 
                 // Logic for "Face-down" (เปิดเมื่อคว่ำจอ)
@@ -173,7 +193,13 @@ class RgbForegroundService : Service() {
                     
                     when {
                         settings.forceHoldEnabled -> {
-                            applyColor(RgbColor(settings.forceHoldColorPacked))
+                            // Lock: fixed colour, optionally with an effect (EFFECT_STATIC = no effect)
+                            val lockColor = RgbColor(settings.forceHoldColorPacked)
+                            val fx = effectEngine.sanitize(settings.forceHoldEffectId)
+                            val frame = if (fx == EffectEngine.EFFECT_STATIC) lockColor
+                                        else effectEngine.compute(fx, tick, lockColor)
+                            applyColor(frame)
+                            tick++
                         }
                         targetColor != RgbColor.OFF || targetAnimationId != EffectEngine.EFFECT_STATIC -> {
                             val frame = if (targetAnimationId == EffectEngine.EFFECT_STATIC) targetColor

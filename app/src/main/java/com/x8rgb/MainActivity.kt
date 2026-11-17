@@ -126,6 +126,9 @@ fun X8rgbApp(viewModel: MainViewModel = hiltViewModel()) {
             onMode = { viewModel.setRingMode(it) },
             onBaseColor = viewModel::setBaseColor,
             onAmbientEffect = viewModel::setAmbientEffect,
+            onForceHold = viewModel::setForceHold,
+            onForceHoldColor = viewModel::setForceHoldColor,
+            onForceHoldEffect = viewModel::setForceHoldEffect,
             onRequestShizuku = viewModel::requestShizukuPermission,
             onGrantShizuku = viewModel::grantViaShizuku,
             onRequestAudio = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
@@ -143,6 +146,9 @@ private fun HomeScreen(
     onMode: (RingMode) -> Unit,
     onBaseColor: (RgbColor) -> Unit,
     onAmbientEffect: (Int) -> Unit,
+    onForceHold: (Boolean) -> Unit,
+    onForceHoldColor: (RgbColor) -> Unit,
+    onForceHoldEffect: (Int) -> Unit,
     onRequestShizuku: () -> Unit,
     onGrantShizuku: () -> Unit,
     onRequestAudio: () -> Unit,
@@ -180,6 +186,15 @@ private fun HomeScreen(
         BaseAndHoldCard(
             baseColor = RgbColor(state.settings.baseColorPacked),
             onBaseColor = onBaseColor,
+        )
+
+        LockCard(
+            enabled = state.settings.forceHoldEnabled,
+            color = RgbColor(state.settings.forceHoldColorPacked),
+            effectId = state.settings.forceHoldEffectId,
+            onEnabled = onForceHold,
+            onColor = onForceHoldColor,
+            onEffect = onForceHoldEffect,
         )
 
         AmbientEffectCard(
@@ -380,6 +395,91 @@ private fun RingModeCard(
             )
         }
     }
+
+@Composable
+private fun LockCard(
+    enabled: Boolean,
+    color: RgbColor,
+    effectId: Int,
+    onEnabled: (Boolean) -> Unit,
+    onColor: (RgbColor) -> Unit,
+    onEffect: (Int) -> Unit,
+) {
+    var pickEffect by remember { mutableStateOf(false) }
+    var pickColor by remember { mutableStateOf(false) }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.card_lock_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.hint_lock), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(stringResource(R.string.label_force_hold), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Switch(checked = enabled, onCheckedChange = onEnabled)
+            }
+
+            if (enabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.label_force_color), style = MaterialTheme.typography.bodyMedium)
+                    ColorDot(color = color, selected = true, size = 36.dp, onClick = { pickColor = true })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.label_lock_effect, lockEffectLabel(effectId)), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { pickEffect = true }) { Text(stringResource(R.string.btn_pick_effect)) }
+                }
+            }
+        }
+    }
+
+    if (pickEffect) {
+        AlertDialog(
+            onDismissRequest = { pickEffect = false },
+            confirmButton = { TextButton(onClick = { pickEffect = false }) { Text(stringResource(R.string.btn_cancel)) } },
+            title = { Text(stringResource(R.string.dialog_select_effect)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                    items(EffectEngine.SELECTABLE_IDS) { id ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEffect(id); pickEffect = false }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = effectId == id, onClick = { onEffect(id); pickEffect = false })
+                            Text(lockEffectLabel(id))
+                        }
+                    }
+                }
+            },
+        )
+    }
+    if (pickColor) {
+        HsvPickerDialog(
+            title = stringResource(R.string.dialog_force_color),
+            initial = color,
+            onPick = { onColor(it); pickColor = false },
+            onDismiss = { pickColor = false },
+        )
+    }
+}
+
+@Composable
+private fun lockEffectLabel(id: Int): String =
+    if (id == EffectEngine.EFFECT_STATIC) stringResource(R.string.lock_no_effect)
+    else EffectEngine.EFFECT_NAMES.getOrElse(id) { "Static" }
 
 @Composable
 private fun HsvPickerDialog(
@@ -820,7 +920,8 @@ private fun RingPreviewCard(settings: AppSettingsEntity, ringMode: RingMode) {
 private fun previewFrame(s: AppSettingsEntity, mode: RingMode, t: Long, engine: EffectEngine): RgbColor {
     if (!s.masterEnabled || mode == RingMode.OFF) return RgbColor.OFF
     val frame = if (s.forceHoldEnabled) {
-        RgbColor(s.forceHoldColorPacked)
+        val lock = RgbColor(s.forceHoldColorPacked)
+        if (s.forceHoldEffectId == EffectEngine.EFFECT_STATIC) lock else engine.compute(s.forceHoldEffectId, t, lock)
     } else {
         val base = RgbColor(s.baseColorPacked)
         val seed = if (base != RgbColor.OFF) base else RgbColor(255, 255, 255)

@@ -1,5 +1,6 @@
 package com.x8rgb.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -19,6 +20,9 @@ data class AppSettingsEntity(
     /** Force-hold locks this color above notifications/music until cleared. */
     val forceHoldEnabled: Boolean      = false,
     val forceHoldColorPacked: Long     = 0xFFFFFF82L,
+    /** Effect applied while locked. EffectEngine.EFFECT_STATIC = solid colour only. */
+    @ColumnInfo(defaultValue = "10")
+    val forceHoldEffectId: Int         = 10,
     /** Always-on effect while idle. EffectEngine.EFFECT_STATIC = solid base only. */
     val ambientEffectId: Int           = 10, // EffectEngine.EFFECT_STATIC
 )

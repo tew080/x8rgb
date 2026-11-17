@@ -53,4 +53,16 @@ class SettingsRepository @Inject constructor(
     suspend fun updateAmbientEffect(id: Int) {
         mutate { it.copy(ambientEffectId = id) }
     }
+
+    suspend fun updateForceHold(enabled: Boolean) {
+        mutate { it.copy(forceHoldEnabled = enabled) }
+    }
+
+    suspend fun updateForceHoldColor(packed: Long) {
+        mutate { it.copy(forceHoldColorPacked = packed) }
+    }
+
+    suspend fun updateForceHoldEffect(id: Int) {
+        mutate { it.copy(forceHoldEffectId = id) }
+    }
 }

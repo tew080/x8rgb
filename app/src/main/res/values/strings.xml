@@ -80,6 +80,10 @@
     <string name="label_ambient_color">สีฐานของเอฟเฟกต์</string>
     <string name="btn_pick_effect">เลือกเอฟเฟกต์</string>
 
+    <string name="card_lock_title">ล็อกสีวงแหวน</string>
+    <string name="hint_lock">ไฟจะแสดงสีที่ล็อกไว้และทับแจ้งเตือนกับเพลง แต่จะหยุดชั่วคราวเมื่อระบบแจ้งเตือนด้วยไฟ</string>
+    <string name="label_lock_effect">เอฟเฟกต์ล็อก: %s</string>
+    <string name="lock_no_effect">ไม่มี (สีเดียว)</string>
     <string name="card_preview_title">ตัวอย่างวงแหวนไฟ (จำลอง)</string>
 
 </resources>

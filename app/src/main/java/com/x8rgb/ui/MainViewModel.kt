@@ -160,6 +160,18 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.updateBaseColor(color.packed) }
     }
 
+    fun setForceHold(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.updateForceHold(enabled) }
+    }
+
+    fun setForceHoldColor(color: RgbColor) {
+        viewModelScope.launch { settingsRepository.updateForceHoldColor(color.packed) }
+    }
+
+    fun setForceHoldEffect(effectId: Int) {
+        viewModelScope.launch { settingsRepository.updateForceHoldEffect(effectId) }
+    }
+
     fun setAmbientEffect(effectId: Int) {
         viewModelScope.launch { settingsRepository.updateAmbientEffect(effectId) }
     }
